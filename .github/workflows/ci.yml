@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-experience-service:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: hatchloom_test
+          POSTGRES_USER: hatchloom
+          POSTGRES_PASSWORD: secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: experience-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_pgsql
+      - run: composer install --prefer-dist --no-progress
+      - run: cp .env.example .env && php artisan key:generate
+      - run: php artisan migrate --force
+        env:
+          DB_HOST: localhost
+          DB_DATABASE: hatchloom_test
+          DB_USERNAME: hatchloom
+          DB_PASSWORD: secret
+      - run: php artisan test
+        env:
+          DB_HOST: localhost
+          DB_DATABASE: hatchloom_test
+          DB_USERNAME: hatchloom
+          DB_PASSWORD: secret
+
+  test-enrolment-service:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: hatchloom_test
+          POSTGRES_USER: hatchloom
+          POSTGRES_PASSWORD: secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: enrolment-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_pgsql
+      - run: composer install --prefer-dist --no-progress
+      - run: cp .env.example .env && php artisan key:generate
+      - run: php artisan migrate --force
+        env:
+          DB_HOST: localhost
+          DB_DATABASE: hatchloom_test
+          DB_USERNAME: hatchloom
+          DB_PASSWORD: secret
+      - run: php artisan test
+        env:
+          DB_HOST: localhost
+          DB_DATABASE: hatchloom_test
+          DB_USERNAME: hatchloom
+          DB_PASSWORD: secret
+
+  test-dashboard-service:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_pgsql
+      - run: composer install --prefer-dist --no-progress
+      - run: cp .env.example .env && php artisan key:generate
+      - run: php artisan test
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [test-experience-service, test-enrolment-service, test-dashboard-service]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose build

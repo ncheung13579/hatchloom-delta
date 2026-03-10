@@ -1,0 +1,40 @@
+# Dependencies
+**/vendor/
+**/node_modules/
+
+# Environment files
+**/.env
+**/.env.backup
+**/.env.production
+
+# IDE
+.idea/
+.vscode/
+.fleet/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Laravel artifacts
+**/.phpunit.result.cache
+**/.phpunit.cache
+**/storage/*.key
+**/database/database.sqlite
+
+# Composer downloaded during Docker builds
+**/composer.phar
+
+# Docker
+**/docker-compose.override.yml
+
+# Project spec / working files (not for submission)
+CLAUDE.md
+MICROSERVICES-SPEC.md
+TASK-D1-INSTRUCTIONS.md
+*.zip
+Hatchloom-Delta-PlantUML-v6/
+Project Requirements & Workpack/
+hatchloom reference documents/
+legends reference documents/
