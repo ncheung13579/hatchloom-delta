@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Contracts\CohortState;
 use App\Models\Scopes\SchoolScope;
+use App\States\ActiveState;
+use App\States\CompletedState;
+use App\States\NotStartedState;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -14,7 +18,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * While an Experience is the template (the "class"), a Cohort is a concrete
  * offering (the "object") with a teacher, date range, capacity, and enrolled
- * students. Follows a one-directional status lifecycle:
+ * students. Follows a one-directional status lifecycle managed by the State
+ * pattern:
  *   not_started -> active -> completed
  *
  * Automatically filtered by SchoolScope to enforce tenant isolation.
@@ -40,6 +45,52 @@ class Cohort extends Model
         static::addGlobalScope(new SchoolScope());
     }
 
+    // ── State pattern ──────────────────────────────────────────
+
+    /**
+     * Map status strings to their corresponding state objects.
+     */
+    private static array $stateMap = [
+        'not_started' => NotStartedState::class,
+        'active' => ActiveState::class,
+        'completed' => CompletedState::class,
+    ];
+
+    /**
+     * Resolve the current CohortState object from the status column.
+     */
+    public function state(): CohortState
+    {
+        $stateClass = self::$stateMap[$this->status] ?? NotStartedState::class;
+        return new $stateClass();
+    }
+
+    /**
+     * Transition to active. Delegates to the current state to check validity.
+     */
+    public function activate(): bool
+    {
+        if (! $this->state()->canActivate()) {
+            return false;
+        }
+        $this->status = (new ActiveState())->status();
+        return $this->save();
+    }
+
+    /**
+     * Transition to completed (terminal state). Delegates to the current state.
+     */
+    public function complete(): bool
+    {
+        if (! $this->state()->canComplete()) {
+            return false;
+        }
+        $this->status = (new CompletedState())->status();
+        return $this->save();
+    }
+
+    // ── Relationships ──────────────────────────────────────────
+
     public function experience(): BelongsTo
     {
         return $this->belongsTo(Experience::class);
@@ -58,31 +109,5 @@ class Cohort extends Model
     public function activeEnrolments(): HasMany
     {
         return $this->hasMany(CohortEnrolment::class)->where('status', 'enrolled');
-    }
-
-    /**
-     * Transition to active. Guard: only allowed from not_started.
-     * Returns false without saving if the current state is anything else.
-     */
-    public function activate(): bool
-    {
-        if ($this->status !== 'not_started') {
-            return false;
-        }
-        $this->status = 'active';
-        return $this->save();
-    }
-
-    /**
-     * Transition to completed (terminal state). Guard: only allowed from active.
-     * Returns false without saving if the cohort is not currently active.
-     */
-    public function complete(): bool
-    {
-        if ($this->status !== 'active') {
-            return false;
-        }
-        $this->status = 'completed';
-        return $this->save();
     }
 }
