@@ -40,8 +40,11 @@ jobs:
           php-version: '8.2'
           extensions: pdo_pgsql
       - run: composer install --prefer-dist --no-progress
-      - run: cp .env.example .env && php artisan key:generate
+      - run: cp .env.testing .env && php artisan key:generate
+      - run: php artisan config:clear
       - run: php artisan migrate --force
+      - name: Debug DB config
+        run: php -r "require 'vendor/autoload.php'; \$app = require 'bootstrap/app.php'; \$app->make('Illuminate\Contracts\Console\Kernel')->bootstrap(); echo 'database.default: ' . config('database.default') . PHP_EOL; echo 'DB_CONNECTION env: ' . env('DB_CONNECTION') . PHP_EOL;"
       - run: vendor/bin/phpunit --colors=always
 
   test-enrolment-service:
@@ -77,8 +80,11 @@ jobs:
           php-version: '8.2'
           extensions: pdo_pgsql
       - run: composer install --prefer-dist --no-progress
-      - run: cp .env.example .env && php artisan key:generate
+      - run: cp .env.testing .env && php artisan key:generate
+      - run: php artisan config:clear
       - run: php artisan migrate --force
+      - name: Debug DB config
+        run: php -r "require 'vendor/autoload.php'; \$app = require 'bootstrap/app.php'; \$app->make('Illuminate\Contracts\Console\Kernel')->bootstrap(); echo 'database.default: ' . config('database.default') . PHP_EOL; echo 'DB_CONNECTION env: ' . env('DB_CONNECTION') . PHP_EOL;"
       - run: vendor/bin/phpunit --colors=always
 
   test-dashboard-service:
