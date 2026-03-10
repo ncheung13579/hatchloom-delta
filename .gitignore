@@ -4,6 +4,8 @@
 
 # Environment files
 **/.env
+!**/.env.example
+!**/.env.testing
 **/.env.backup
 **/.env.production
 
