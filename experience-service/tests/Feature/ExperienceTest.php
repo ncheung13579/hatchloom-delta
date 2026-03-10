@@ -8,13 +8,13 @@ use App\Models\Experience;
 use App\Models\ExperienceCourse;
 use App\Models\School;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class ExperienceTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations;
 
     private User $admin;
     private School $school;
@@ -206,6 +206,87 @@ class ExperienceTest extends TestCase
         $response->assertStatus(401);
     }
 
+    public function test_can_search_students_in_experience(): void
+    {
+        Http::fake([
+            '*/api/school/cohorts*' => Http::response([
+                'data' => [
+                    ['id' => 1, 'name' => 'Cohort Alpha', 'status' => 'active', 'student_count' => 5, 'capacity' => 25],
+                    ['id' => 2, 'name' => 'Cohort Beta', 'status' => 'active', 'student_count' => 3, 'capacity' => 20],
+                ],
+            ]),
+        ]);
+
+        $experience = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Business Foundations',
+            'description' => 'Intro to business',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->getJson("/api/school/experiences/{$experience->id}/students?search=Alpha", $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonFragment(['cohort_name' => 'Cohort Alpha']);
+    }
+
+    public function test_can_export_experience_students(): void
+    {
+        Http::fake([
+            '*/api/school/cohorts*' => Http::response([
+                'data' => [
+                    ['id' => 1, 'name' => 'Cohort Alpha', 'status' => 'active', 'student_count' => 5, 'capacity' => 25, 'start_date' => '2026-03-01'],
+                ],
+            ]),
+        ]);
+
+        $experience = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Business Foundations',
+            'description' => 'Intro to business',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->get("/api/school/experiences/{$experience->id}/students/export", $this->authHeaders());
+
+        $response->assertStatus(200);
+        $this->assertStringContainsString('text/csv', $response->headers->get('Content-Type'));
+    }
+
+    public function test_can_get_student_detail_in_experience(): void
+    {
+        Http::fake([
+            '*/api/school/cohorts*' => Http::response([
+                'data' => [
+                    ['id' => 1, 'name' => 'Cohort Alpha', 'status' => 'active', 'student_count' => 5, 'capacity' => 25],
+                ],
+            ]),
+        ]);
+
+        $experience = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Business Foundations',
+            'description' => 'Intro to business',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->getJson("/api/school/experiences/{$experience->id}/students/3", $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'student_id',
+                'experience_id',
+                'cohort_id',
+                'cohort_name',
+                'status',
+                'credits' => ['earned', 'total', 'progress'],
+            ]);
+    }
+
     public function test_can_get_experience_contents(): void
     {
         $experience = Experience::create([
@@ -230,6 +311,322 @@ class ExperienceTest extends TestCase
                 'courses' => [
                     ['id', 'name', 'sequence', 'blocks'],
                 ],
+            ]);
+    }
+
+    public function test_can_update_experience(): void
+    {
+        $experience = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Old Name',
+            'description' => 'Old description',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->putJson("/api/school/experiences/{$experience->id}", [
+            'name' => 'Updated Name',
+            'description' => 'Updated description',
+        ], $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonFragment(['name' => 'Updated Name']);
+
+        $this->assertDatabaseHas('experiences', [
+            'id' => $experience->id,
+            'name' => 'Updated Name',
+            'description' => 'Updated description',
+        ]);
+    }
+
+    public function test_can_update_experience_courses(): void
+    {
+        $experience = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Business Foundations',
+            'description' => 'Intro to business',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        ExperienceCourse::create([
+            'experience_id' => $experience->id,
+            'course_id' => 1,
+            'sequence' => 1,
+        ]);
+
+        // Replace courses entirely
+        $response = $this->putJson("/api/school/experiences/{$experience->id}", [
+            'course_ids' => [2, 3],
+        ], $this->authHeaders());
+
+        $response->assertStatus(200);
+
+        // Old course should be gone, new ones present
+        $this->assertDatabaseMissing('experience_courses', [
+            'experience_id' => $experience->id,
+            'course_id' => 1,
+        ]);
+        $this->assertDatabaseHas('experience_courses', [
+            'experience_id' => $experience->id,
+            'course_id' => 2,
+            'sequence' => 1,
+        ]);
+        $this->assertDatabaseHas('experience_courses', [
+            'experience_id' => $experience->id,
+            'course_id' => 3,
+            'sequence' => 2,
+        ]);
+    }
+
+    public function test_can_delete_experience(): void
+    {
+        $experience = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'To Be Deleted',
+            'description' => 'Will be archived',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->deleteJson("/api/school/experiences/{$experience->id}", [], $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonFragment(['message' => 'Experience archived']);
+
+        // Should be soft-deleted with archived status
+        $this->assertDatabaseHas('experiences', [
+            'id' => $experience->id,
+            'status' => 'archived',
+        ]);
+
+        // Should not appear in the list anymore
+        $listResponse = $this->getJson('/api/school/experiences', $this->authHeaders());
+        $listResponse->assertJsonCount(0, 'data');
+    }
+
+    public function test_delete_nonexistent_experience_returns_404(): void
+    {
+        $response = $this->deleteJson('/api/school/experiences/9999', [], $this->authHeaders());
+
+        $response->assertStatus(404);
+    }
+
+    public function test_create_experience_with_invalid_course_ids_fails(): void
+    {
+        $response = $this->postJson('/api/school/experiences', [
+            'name' => 'Bad Experience',
+            'description' => 'Has invalid courses',
+            'course_ids' => [999, 888],
+        ], $this->authHeaders());
+
+        $response->assertStatus(422)
+            ->assertJsonFragment(['message' => 'One or more course IDs are invalid']);
+    }
+
+    public function test_update_experience_with_invalid_course_ids_fails(): void
+    {
+        $experience = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Valid Experience',
+            'description' => 'Has valid courses',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->putJson("/api/school/experiences/{$experience->id}", [
+            'course_ids' => [999],
+        ], $this->authHeaders());
+
+        $response->assertStatus(422)
+            ->assertJsonFragment(['message' => 'One or more course IDs are invalid']);
+    }
+
+    public function test_list_experiences_returns_empty_for_new_school(): void
+    {
+        $response = $this->getJson('/api/school/experiences', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('meta.total', 0);
+    }
+
+    // ── Edge cases ─────────────────────────────────────────────
+
+    public function test_create_experience_with_empty_name_fails(): void
+    {
+        $response = $this->postJson('/api/school/experiences', [
+            'name' => '',
+            'description' => 'Has empty name',
+            'course_ids' => [1],
+        ], $this->authHeaders());
+
+        $response->assertStatus(422);
+    }
+
+    public function test_create_experience_with_very_long_name_fails(): void
+    {
+        $response = $this->postJson('/api/school/experiences', [
+            'name' => str_repeat('A', 256),
+            'description' => 'Name exceeds 255 chars',
+            'course_ids' => [1],
+        ], $this->authHeaders());
+
+        $response->assertStatus(422);
+    }
+
+    public function test_create_experience_with_empty_course_ids_array_fails(): void
+    {
+        $response = $this->postJson('/api/school/experiences', [
+            'name' => 'No Courses',
+            'description' => 'Empty course array',
+            'course_ids' => [],
+        ], $this->authHeaders());
+
+        $response->assertStatus(422);
+    }
+
+    public function test_search_is_case_insensitive(): void
+    {
+        Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Business Foundations',
+            'description' => 'Test',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->getJson('/api/school/experiences?search=business', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonCount(1, 'data');
+    }
+
+    // ── Pagination ─────────────────────────────────────────────
+
+    public function test_pagination_respects_per_page(): void
+    {
+        for ($i = 1; $i <= 5; $i++) {
+            Experience::create([
+                'school_id' => $this->school->id,
+                'name' => "Experience {$i}",
+                'description' => 'Test',
+                'status' => 'active',
+                'created_by' => $this->admin->id,
+            ]);
+        }
+
+        $response = $this->getJson('/api/school/experiences?per_page=2', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('meta.per_page', 2)
+            ->assertJsonPath('meta.total', 5)
+            ->assertJsonPath('meta.last_page', 3);
+    }
+
+    // ── Tighter assertions ─────────────────────────────────────
+
+    public function test_create_experience_response_includes_courses(): void
+    {
+        $response = $this->postJson('/api/school/experiences', [
+            'name' => 'Full Response Check',
+            'description' => 'Verify courses in response',
+            'course_ids' => [1, 3],
+        ], $this->authHeaders());
+
+        $response->assertStatus(201)
+            ->assertJsonStructure([
+                'id', 'name', 'description', 'status', 'courses', 'created_at',
+            ]);
+
+        $data = $response->json();
+        $this->assertEquals('Full Response Check', $data['name']);
+        $this->assertEquals('active', $data['status']);
+        $this->assertCount(2, $data['courses']);
+        $this->assertEquals('Intro to Entrepreneurship', $data['courses'][0]['name']);
+        $this->assertEquals('Marketing Basics', $data['courses'][1]['name']);
+    }
+
+    public function test_list_experiences_response_includes_all_fields(): void
+    {
+        Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Test Experience',
+            'description' => 'A test',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->getJson('/api/school/experiences', $this->authHeaders());
+
+        $response->assertStatus(200);
+        $data = $response->json('data.0');
+        $this->assertArrayHasKey('id', $data);
+        $this->assertArrayHasKey('name', $data);
+        $this->assertArrayHasKey('description', $data);
+        $this->assertArrayHasKey('status', $data);
+        $this->assertArrayHasKey('course_count', $data);
+        $this->assertArrayHasKey('created_by', $data);
+        $this->assertArrayHasKey('created_at', $data);
+        $this->assertEquals('Admin User', $data['created_by']);
+    }
+
+    public function test_experience_statistics_values_are_correct(): void
+    {
+        Http::fake([
+            '*/api/school/cohorts*' => Http::response([
+                'data' => [
+                    ['id' => 1, 'name' => 'Active Cohort', 'status' => 'active', 'student_count' => 10, 'capacity' => 20],
+                    ['id' => 2, 'name' => 'Completed Cohort', 'status' => 'completed', 'student_count' => 8, 'capacity' => 15],
+                ],
+            ]),
+        ]);
+
+        $experience = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Stats Test',
+            'description' => 'Test',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->getJson("/api/school/experiences/{$experience->id}/statistics", $this->authHeaders());
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertEquals($experience->id, $data['experience_id']);
+        $this->assertEquals(18, $data['enrolment']['total_students']);
+        $this->assertEquals(10, $data['enrolment']['active']);
+    }
+
+    // ── Error envelope consistency ─────────────────────────────
+
+    public function test_404_error_uses_standard_envelope(): void
+    {
+        $response = $this->getJson('/api/school/experiences/9999', $this->authHeaders());
+
+        $response->assertStatus(404)
+            ->assertJsonStructure(['error', 'message', 'code'])
+            ->assertJsonFragment([
+                'error' => true,
+                'code' => 'NOT_FOUND',
+            ]);
+    }
+
+    public function test_422_error_for_invalid_courses_uses_standard_envelope(): void
+    {
+        $response = $this->postJson('/api/school/experiences', [
+            'name' => 'Bad Courses',
+            'description' => 'Invalid course IDs',
+            'course_ids' => [999],
+        ], $this->authHeaders());
+
+        $response->assertStatus(422)
+            ->assertJsonStructure(['error', 'message', 'code'])
+            ->assertJsonFragment([
+                'error' => true,
+                'code' => 'VALIDATION_ERROR',
             ]);
     }
 }

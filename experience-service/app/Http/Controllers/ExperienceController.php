@@ -10,6 +10,14 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
+/**
+ * Thin REST controller for Experience CRUD operations (Screen 301).
+ *
+ * Handles input validation and response formatting only — all business
+ * logic is delegated to ExperienceService. Course names are resolved via
+ * MockCourseDataProvider, and cohort data is fetched from the Enrolment
+ * Service over HTTP.
+ */
 class ExperienceController extends Controller
 {
     public function __construct(
@@ -48,6 +56,10 @@ class ExperienceController extends Controller
         ]);
     }
 
+    /**
+     * Create a new Experience after validating that all course_ids exist
+     * in the upstream course catalogue (currently mocked).
+     */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -83,6 +95,13 @@ class ExperienceController extends Controller
         ], 201);
     }
 
+    /**
+     * Show a single Experience with its courses and cohorts.
+     *
+     * Cohort data is fetched from the Enrolment Service via HTTP. If the
+     * Enrolment Service is unreachable, the response degrades gracefully
+     * with an empty cohorts array.
+     */
     public function show(int $id): JsonResponse
     {
         $experience = $this->experienceService->getExperience($id);

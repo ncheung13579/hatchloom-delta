@@ -7,6 +7,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Links a student to a cohort with enrolment tracking.
+ *
+ * Uses a soft-delete pattern: removed students get status='removed' and a
+ * removed_at timestamp rather than being hard-deleted. This preserves the
+ * audit trail for reporting and CSV export. Records are never physically
+ * deleted from the database.
+ */
 class CohortEnrolment extends Model
 {
     public $timestamps = false;

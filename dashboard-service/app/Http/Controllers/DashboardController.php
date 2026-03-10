@@ -7,17 +7,25 @@ namespace App\Http\Controllers;
 use App\Services\DashboardService;
 use Illuminate\Http\JsonResponse;
 
+/**
+ * Thin controller for Screen 300 (School Admin Dashboard).
+ *
+ * Validates input and delegates all business logic to DashboardService.
+ * Every endpoint requires an authenticated school_admin or school_teacher.
+ */
 class DashboardController extends Controller
 {
     public function __construct(
         private readonly DashboardService $dashboardService
     ) {}
 
+    /** Return the aggregated dashboard overview for the caller's school. */
     public function index(): JsonResponse
     {
         return response()->json($this->dashboardService->getDashboardOverview());
     }
 
+    /** Return detailed drill-down data for a single student. */
     public function studentDrillDown(int $studentId): JsonResponse
     {
         $result = $this->dashboardService->getStudentDrillDown($studentId);
@@ -31,5 +39,17 @@ class DashboardController extends Controller
         }
 
         return response()->json($result);
+    }
+
+    /** Return Alberta PoS curriculum coverage data (R3 reporting). */
+    public function posCoverage(): JsonResponse
+    {
+        return response()->json($this->dashboardService->getPosCoverage());
+    }
+
+    /** Return student engagement rates for the last 30 days (R3 reporting). */
+    public function engagement(): JsonResponse
+    {
+        return response()->json($this->dashboardService->getEngagementRates());
     }
 }

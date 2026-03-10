@@ -10,6 +10,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * D1 mock authentication middleware.
+ *
+ * Maps hardcoded bearer tokens to seeded User records, bypassing real
+ * authentication. This will be replaced by Team Quebec's auth service
+ * integration in a later deliverable. Only school_admin and
+ * school_teacher roles are permitted through.
+ */
 class MockAuthMiddleware
 {
     private const TOKEN_MAP = [

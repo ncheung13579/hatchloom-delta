@@ -19,18 +19,19 @@ Seeds: schools, users, experiences (reference), 3 cohorts, 8 enrolments.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/cohorts` | List cohorts |
-| POST | `/api/cohorts` | Create cohort |
-| GET | `/api/cohorts/{id}` | Get cohort detail |
-| PUT | `/api/cohorts/{id}` | Update cohort |
-| PATCH | `/api/cohorts/{id}/activate` | Activate cohort |
-| PATCH | `/api/cohorts/{id}/complete` | Complete cohort |
-| POST | `/api/cohorts/{id}/enrolments` | Enrol student |
-| DELETE | `/api/cohorts/{id}/enrolments/{studentId}` | Remove student |
-| GET | `/api/enrolments` | Enrolment overview |
-| GET | `/api/enrolments/statistics` | Statistics with warnings |
-| GET | `/api/enrolments/export` | Export CSV |
-| GET | `/api/enrolments/health` | Health check |
+| GET | `/api/school/cohorts` | List cohorts (supports `?experience_id=`, `?status=`) |
+| POST | `/api/school/cohorts` | Create new cohort |
+| GET | `/api/school/cohorts/{id}` | Get cohort detail |
+| PUT | `/api/school/cohorts/{id}` | Update cohort |
+| PATCH | `/api/school/cohorts/{id}/activate` | Transition cohort to active |
+| PATCH | `/api/school/cohorts/{id}/complete` | Transition cohort to completed |
+| POST | `/api/school/cohorts/{id}/enrolments` | Enrol a student |
+| DELETE | `/api/school/cohorts/{id}/enrolments/{studentId}` | Remove a student (soft delete) |
+| GET | `/api/school/enrolments` | Enrolment overview (supports `?search=`, `?experience_id=`, `?cohort_id=`, `?grade=`) |
+| GET | `/api/school/enrolments/students/{studentId}` | Student drill-down from enrolment context |
+| GET | `/api/school/enrolments/statistics` | Enrolment statistics with warnings |
+| GET | `/api/school/enrolments/export` | Export enrolments as CSV |
+| GET | `/api/school/enrolments/health` | Health check |
 
 ## Running Tests
 

@@ -10,6 +10,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('cohort_enrolments')) {
+            return;
+        }
+
         Schema::create('cohort_enrolments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('cohort_id')->constrained('cohorts');

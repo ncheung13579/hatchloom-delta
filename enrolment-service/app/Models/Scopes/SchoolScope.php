@@ -9,6 +9,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Scope;
 use Illuminate\Support\Facades\Auth;
 
+/**
+ * Global scope that enforces automatic tenant isolation by school.
+ *
+ * Applied to any model with a school_id column (e.g., Cohort). Automatically
+ * appends `WHERE school_id = ?` using the authenticated user's school_id,
+ * ensuring that queries never leak data across school boundaries. This is the
+ * Decorator pattern applied to Eloquent's query builder.
+ */
 class SchoolScope implements Scope
 {
     public function apply(Builder $builder, Model $model): void

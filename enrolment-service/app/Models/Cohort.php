@@ -9,6 +9,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * A live running instance of an Experience, scoped to a single school.
+ *
+ * While an Experience is the template (the "class"), a Cohort is a concrete
+ * offering (the "object") with a teacher, date range, capacity, and enrolled
+ * students. Follows a one-directional status lifecycle:
+ *   not_started -> active -> completed
+ *
+ * Automatically filtered by SchoolScope to enforce tenant isolation.
+ */
 class Cohort extends Model
 {
     protected $fillable = [
@@ -50,6 +60,10 @@ class Cohort extends Model
         return $this->hasMany(CohortEnrolment::class)->where('status', 'enrolled');
     }
 
+    /**
+     * Transition to active. Guard: only allowed from not_started.
+     * Returns false without saving if the current state is anything else.
+     */
     public function activate(): bool
     {
         if ($this->status !== 'not_started') {
@@ -59,6 +73,10 @@ class Cohort extends Model
         return $this->save();
     }
 
+    /**
+     * Transition to completed (terminal state). Guard: only allowed from active.
+     * Returns false without saving if the cohort is not currently active.
+     */
     public function complete(): bool
     {
         if ($this->status !== 'active') {

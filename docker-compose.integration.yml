@@ -1,0 +1,139 @@
+services:
+  postgres-integration:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hatchloom_integration
+      POSTGRES_USER: hatchloom
+      POSTGRES_PASSWORD: secret
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hatchloom -d hatchloom_integration"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  # Enrolment boots first — it creates schools, users, experiences, cohorts
+  enrolment-service:
+    build: ./enrolment-service
+    command: >
+      sh -c "php artisan migrate --force && php artisan db:seed --force &&
+             php /reset-sequences.php &&
+             php artisan serve --host=0.0.0.0 --port=8003"
+    volumes:
+      - ./reset-sequences.php:/reset-sequences.php:ro
+    environment:
+      APP_NAME: EnrolmentService
+      APP_KEY: base64:dGVzdGtleWZvcmVucm9sbWVudHNlcnZpY2Ux
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres-integration
+      DB_PORT: 5432
+      DB_DATABASE: hatchloom_integration
+      DB_USERNAME: hatchloom
+      DB_PASSWORD: secret
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+    depends_on:
+      postgres-integration:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php -r \"echo file_get_contents('http://localhost:8003/api/school/enrolments/health');\" || exit 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  # Experience boots second — shared tables already exist (guarded migrations)
+  experience-service:
+    build: ./experience-service
+    command: >
+      sh -c "php artisan migrate --force && php artisan db:seed --force &&
+             php /reset-sequences.php &&
+             php artisan serve --host=0.0.0.0 --port=8002"
+    volumes:
+      - ./reset-sequences.php:/reset-sequences.php:ro
+    environment:
+      APP_NAME: ExperienceService
+      APP_KEY: base64:dGVzdGtleWZvcmV4cGVyaWVuY2VzZXJ2aWNl
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres-integration
+      DB_PORT: 5432
+      DB_DATABASE: hatchloom_integration
+      DB_USERNAME: hatchloom
+      DB_PASSWORD: secret
+      ENROLMENT_SERVICE_URL: http://enrolment-service:8003
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+    depends_on:
+      postgres-integration:
+        condition: service_healthy
+      enrolment-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php -r \"echo file_get_contents('http://localhost:8002/api/school/experiences/health');\" || exit 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  # Dashboard boots last — aggregation-only, no unique tables
+  dashboard-service:
+    build: ./dashboard-service
+    command: >
+      sh -c "php artisan migrate --force && php artisan db:seed --force &&
+             php /reset-sequences.php &&
+             php artisan serve --host=0.0.0.0 --port=8001"
+    volumes:
+      - ./reset-sequences.php:/reset-sequences.php:ro
+    ports:
+      - "8001:8001"
+    environment:
+      APP_NAME: DashboardService
+      APP_KEY: base64:dGVzdGtleWZvcmRhc2hib2FyZHNlcnZpY2Ux
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres-integration
+      DB_PORT: 5432
+      DB_DATABASE: hatchloom_integration
+      DB_USERNAME: hatchloom
+      DB_PASSWORD: secret
+      EXPERIENCE_SERVICE_URL: http://experience-service:8002
+      ENROLMENT_SERVICE_URL: http://enrolment-service:8003
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+    depends_on:
+      postgres-integration:
+        condition: service_healthy
+      experience-service:
+        condition: service_healthy
+      enrolment-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php -r \"echo file_get_contents('http://localhost:8001/api/school/dashboard/health');\" || exit 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  # Lightweight container that runs the integration test script
+  integration-runner:
+    image: curlimages/curl:latest
+    depends_on:
+      dashboard-service:
+        condition: service_healthy
+      experience-service:
+        condition: service_healthy
+      enrolment-service:
+        condition: service_healthy
+    volumes:
+      - ./run-integration-tests.sh:/tests/run-integration-tests.sh:ro
+    entrypoint: ["sh", "/tests/run-integration-tests.sh"]
+    environment:
+      DASHBOARD_URL: http://dashboard-service:8001
+      EXPERIENCE_URL: http://experience-service:8002
+      ENROLMENT_URL: http://enrolment-service:8003

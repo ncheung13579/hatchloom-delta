@@ -19,9 +19,11 @@ Seeds shared reference tables (`schools`, `users`) only.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/dashboard` | Aggregated dashboard overview |
-| GET | `/api/dashboard/students/{id}` | Student drill-down |
-| GET | `/api/dashboard/health` | Health check |
+| GET | `/api/school/dashboard` | Aggregated dashboard overview with summary block |
+| GET | `/api/school/dashboard/students/{id}` | Student drill-down with credentials and curriculum mapping |
+| GET | `/api/school/dashboard/reporting/pos-coverage` | Per-student Alberta PoS curriculum coverage |
+| GET | `/api/school/dashboard/reporting/engagement` | Student engagement rates and activity metrics |
+| GET | `/api/school/dashboard/health` | Health check |
 
 ## Running Tests
 

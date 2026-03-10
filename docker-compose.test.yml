@@ -1,0 +1,32 @@
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hatchloom_test
+      POSTGRES_USER: hatchloom
+      POSTGRES_PASSWORD: secret
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hatchloom -d hatchloom_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    environment:
+      APP_ENV: testing
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres-test
+      DB_PORT: 5432
+      DB_DATABASE: hatchloom_test
+      DB_USERNAME: hatchloom
+      DB_PASSWORD: secret
+      CACHE_STORE: array
+      SESSION_DRIVER: array

@@ -15,5 +15,7 @@ Route::prefix('school')->group(function () {
     Route::middleware('mock.auth')->group(function () {
         Route::get('dashboard', [DashboardController::class, 'index']);
         Route::get('dashboard/students/{studentId}', [DashboardController::class, 'studentDrillDown']);
+        Route::get('dashboard/reporting/pos-coverage', [DashboardController::class, 'posCoverage']);
+        Route::get('dashboard/reporting/engagement', [DashboardController::class, 'engagement']);
     });
 });

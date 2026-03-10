@@ -4,7 +4,18 @@ declare(strict_types=1);
 
 namespace App\Services;
 
-class MockCourseDataProvider
+use App\Contracts\CourseDataProviderInterface;
+
+/**
+ * Strategy pattern placeholder for Team Papa's Course Service.
+ *
+ * Provides a static in-memory catalogue of mock courses so that the
+ * Experience Service can validate course IDs and display course details
+ * without a live dependency on the Course Service. When Team Papa's API
+ * is available, swap the binding in AppServiceProvider to point at the
+ * real implementation instead.
+ */
+class MockCourseDataProvider implements CourseDataProviderInterface
 {
     private static array $courses = [
         1 => [

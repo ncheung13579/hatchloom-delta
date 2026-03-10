@@ -8,6 +8,13 @@ use App\Models\Cohort;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
 
+/**
+ * Manages the full cohort lifecycle: CRUD operations and state transitions.
+ *
+ * Cohorts follow a one-directional state machine: not_started -> active -> completed.
+ * State transition logic is enforced by the Cohort model; this service acts as the
+ * boundary between controllers and the model layer.
+ */
 class CohortService
 {
     public function listCohorts(?int $experienceId = null, ?string $status = null): Collection
@@ -57,11 +64,25 @@ class CohortService
         return $cohort->fresh();
     }
 
+    /**
+     * Transition a cohort from not_started to active.
+     *
+     * Only not_started cohorts can be activated. Returns false if the transition
+     * is invalid (cohort is already active or completed). The state machine is
+     * one-directional — there is no way to revert to a previous state.
+     */
     public function activateCohort(Cohort $cohort): bool
     {
         return $cohort->activate();
     }
 
+    /**
+     * Transition a cohort from active to completed.
+     *
+     * Only active cohorts can be completed. Returns false if the cohort is still
+     * in not_started or already completed. This is a terminal state — once
+     * completed, a cohort cannot be reactivated.
+     */
     public function completeCohort(Cohort $cohort): bool
     {
         return $cohort->complete();

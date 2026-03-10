@@ -9,12 +9,12 @@ use App\Models\CohortEnrolment;
 use App\Models\Experience;
 use App\Models\School;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Tests\TestCase;
 
 class EnrolmentTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseMigrations;
 
     private User $admin;
     private School $school;
@@ -201,5 +201,546 @@ class EnrolmentTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertStringContainsString('text/csv', $response->headers->get('Content-Type'));
+    }
+
+    /**
+     * Verify that passing experience_id narrows the student list to only those
+     * enrolled in cohorts belonging to that experience.
+     */
+    public function test_can_filter_enrolments_by_experience(): void
+    {
+        // Create a second experience with its own cohort
+        $experience2 = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Digital Marketing',
+            'description' => 'Second experience',
+            'status' => 'active',
+            'created_by' => 1,
+        ]);
+
+        $cohort2 = Cohort::create([
+            'experience_id' => $experience2->id,
+            'school_id' => $this->school->id,
+            'name' => 'Cohort DM',
+            'status' => 'active',
+            'capacity' => 20,
+            'start_date' => '2026-02-01',
+            'end_date' => '2026-06-01',
+        ]);
+
+        $student2 = User::create([
+            'name' => 'Student 2',
+            'email' => 'student2@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'student',
+            'school_id' => $this->school->id,
+        ]);
+
+        // Enrol student1 in experience1's cohort, student2 in experience2's cohort
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        CohortEnrolment::create([
+            'cohort_id' => $cohort2->id,
+            'student_id' => $student2->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        // Filter by experience1 — should only return student1
+        $response = $this->getJson(
+            "/api/school/enrolments?experience_id={$this->experience->id}",
+            $this->authHeaders()
+        );
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        $this->assertCount(1, $data);
+        $this->assertEquals($this->student->id, $data[0]['student_id']);
+    }
+
+    /**
+     * Verify that passing cohort_id narrows the student list to only those
+     * enrolled in that specific cohort.
+     */
+    public function test_can_filter_enrolments_by_cohort(): void
+    {
+        $cohort2 = Cohort::create([
+            'experience_id' => $this->experience->id,
+            'school_id' => $this->school->id,
+            'name' => 'Cohort B',
+            'status' => 'active',
+            'capacity' => 20,
+            'start_date' => '2026-03-01',
+            'end_date' => '2026-07-01',
+        ]);
+
+        $student2 = User::create([
+            'name' => 'Student 2',
+            'email' => 'student2@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'student',
+            'school_id' => $this->school->id,
+        ]);
+
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        CohortEnrolment::create([
+            'cohort_id' => $cohort2->id,
+            'student_id' => $student2->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        // Filter by cohort2 — should only return student2
+        $response = $this->getJson(
+            "/api/school/enrolments?cohort_id={$cohort2->id}",
+            $this->authHeaders()
+        );
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        $this->assertCount(1, $data);
+        $this->assertEquals($student2->id, $data[0]['student_id']);
+    }
+
+    /**
+     * Verify the student detail drill-down returns the expected structure
+     * including student info, enrolments list, and mock credential summary.
+     */
+    public function test_can_get_student_detail_from_enrolment(): void
+    {
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        $response = $this->getJson(
+            "/api/school/enrolments/students/{$this->student->id}",
+            $this->authHeaders()
+        );
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'student' => ['id', 'name', 'email', 'grade'],
+                'enrolments' => [
+                    ['cohort_id', 'cohort_name', 'experience_name', 'status', 'enrolled_at'],
+                ],
+                'credentials' => ['total_earned', 'in_progress', 'details'],
+            ]);
+
+        $data = $response->json();
+        $this->assertEquals($this->student->id, $data['student']['id']);
+        $this->assertEquals($this->student->name, $data['student']['name']);
+        $this->assertCount(1, $data['enrolments']);
+        $this->assertEquals($this->activeCohort->id, $data['enrolments'][0]['cohort_id']);
+    }
+
+    /**
+     * Verify that requesting a non-existent student returns 404 with the
+     * standard error envelope.
+     */
+    public function test_student_detail_not_found_returns_404(): void
+    {
+        $response = $this->getJson(
+            '/api/school/enrolments/students/9999',
+            $this->authHeaders()
+        );
+
+        $response->assertStatus(404)
+            ->assertJsonFragment([
+                'error' => true,
+                'message' => 'Student not found',
+                'code' => 'NOT_FOUND',
+            ]);
+    }
+
+    /**
+     * Verify that enrolling a student when the cohort is at capacity returns 422.
+     */
+    public function test_cannot_enrol_when_cohort_at_capacity(): void
+    {
+        // Create a cohort with capacity of 1
+        $smallCohort = Cohort::create([
+            'experience_id' => $this->experience->id,
+            'school_id' => $this->school->id,
+            'name' => 'Tiny Cohort',
+            'status' => 'active',
+            'capacity' => 1,
+            'start_date' => '2026-02-01',
+            'end_date' => '2026-06-01',
+        ]);
+
+        // Fill the single slot
+        CohortEnrolment::create([
+            'cohort_id' => $smallCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        // Try to enrol a second student
+        $student2 = User::create([
+            'name' => 'Student 2',
+            'email' => 'student2@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'student',
+            'school_id' => $this->school->id,
+        ]);
+
+        $response = $this->postJson("/api/school/cohorts/{$smallCohort->id}/enrolments", [
+            'student_id' => $student2->id,
+        ], $this->authHeaders());
+
+        $response->assertStatus(422)
+            ->assertJsonFragment(['message' => 'Cohort is at full capacity']);
+    }
+
+    /**
+     * Verify that re-enrolling a removed student is blocked in D1.
+     * The duplicate check includes removed enrolments.
+     */
+    public function test_cannot_reenrol_after_removal(): void
+    {
+        // Create a removed enrolment
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'removed',
+            'enrolled_at' => now(),
+            'removed_at' => now(),
+        ]);
+
+        // Try to re-enrol the same student
+        $response = $this->postJson("/api/school/cohorts/{$this->activeCohort->id}/enrolments", [
+            'student_id' => $this->student->id,
+        ], $this->authHeaders());
+
+        $response->assertStatus(422)
+            ->assertJsonFragment(['code' => 'DUPLICATE_ENROLMENT']);
+    }
+
+    /**
+     * Verify that a student from a different school cannot be enrolled.
+     */
+    public function test_cannot_enrol_student_from_different_school(): void
+    {
+        $otherSchool = School::create([
+            'name' => 'Other Academy',
+            'code' => 'OTHER',
+            'is_active' => true,
+        ]);
+
+        $otherStudent = User::create([
+            'name' => 'Foreign Student',
+            'email' => 'foreign@other.edu',
+            'password' => bcrypt('password'),
+            'role' => 'student',
+            'school_id' => $otherSchool->id,
+        ]);
+
+        $response = $this->postJson("/api/school/cohorts/{$this->activeCohort->id}/enrolments", [
+            'student_id' => $otherStudent->id,
+        ], $this->authHeaders());
+
+        $response->assertStatus(422)
+            ->assertJsonFragment(['message' => 'Student not found or not in your school']);
+    }
+
+    /**
+     * Verify that removing a student who is not enrolled returns 404.
+     */
+    public function test_remove_unenrolled_student_returns_404(): void
+    {
+        $response = $this->deleteJson(
+            "/api/school/cohorts/{$this->activeCohort->id}/enrolments/{$this->student->id}",
+            [],
+            $this->authHeaders()
+        );
+
+        $response->assertStatus(404)
+            ->assertJsonFragment(['message' => 'Enrolment not found']);
+    }
+
+    /**
+     * Verify that enrolling in a completed cohort is blocked.
+     */
+    public function test_cannot_enrol_in_completed_cohort(): void
+    {
+        $completedCohort = Cohort::create([
+            'experience_id' => $this->experience->id,
+            'school_id' => $this->school->id,
+            'name' => 'Done Cohort',
+            'status' => 'completed',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-03-01',
+        ]);
+
+        $response = $this->postJson("/api/school/cohorts/{$completedCohort->id}/enrolments", [
+            'student_id' => $this->student->id,
+        ], $this->authHeaders());
+
+        $response->assertStatus(422)
+            ->assertJsonFragment(['message' => 'Cohort is not active']);
+    }
+
+    /**
+     * Verify enrolment statistics warning is generated for unassigned students.
+     */
+    public function test_statistics_contain_unassigned_warning_details(): void
+    {
+        // Student exists but has no enrolments
+        $response = $this->getJson('/api/school/enrolments/statistics', $this->authHeaders());
+
+        $response->assertStatus(200);
+        $data = $response->json();
+
+        $this->assertGreaterThan(0, $data['not_assigned']);
+        $this->assertNotEmpty($data['warnings']);
+        $warningTypes = array_column($data['warnings'], 'type');
+        $this->assertContains('unassigned_students', $warningTypes);
+    }
+
+    /**
+     * Verify capacity warning appears in statistics when a cohort is near full.
+     */
+    public function test_statistics_contain_capacity_warning(): void
+    {
+        // Create a cohort with capacity 2 and fill it with 2 students (100% = ≥90%)
+        $smallCohort = Cohort::create([
+            'experience_id' => $this->experience->id,
+            'school_id' => $this->school->id,
+            'name' => 'Nearly Full Cohort',
+            'status' => 'active',
+            'capacity' => 2,
+            'start_date' => '2026-02-01',
+            'end_date' => '2026-06-01',
+        ]);
+
+        CohortEnrolment::create([
+            'cohort_id' => $smallCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        $student2 = User::create([
+            'name' => 'Student 2',
+            'email' => 'student2@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'student',
+            'school_id' => $this->school->id,
+        ]);
+
+        CohortEnrolment::create([
+            'cohort_id' => $smallCohort->id,
+            'student_id' => $student2->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        $response = $this->getJson('/api/school/enrolments/statistics', $this->authHeaders());
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $warningTypes = array_column($data['warnings'], 'type');
+        $this->assertContains('capacity_warning', $warningTypes);
+    }
+
+    // ── Edge cases ─────────────────────────────────────────────
+
+    public function test_enrol_nonexistent_cohort_returns_404(): void
+    {
+        $response = $this->postJson('/api/school/cohorts/9999/enrolments', [
+            'student_id' => $this->student->id,
+        ], $this->authHeaders());
+
+        $response->assertStatus(404)
+            ->assertJsonFragment([
+                'error' => true,
+                'code' => 'NOT_FOUND',
+            ]);
+    }
+
+    public function test_enrol_without_student_id_fails_validation(): void
+    {
+        $response = $this->postJson(
+            "/api/school/cohorts/{$this->activeCohort->id}/enrolments",
+            [],
+            $this->authHeaders()
+        );
+
+        $response->assertStatus(422);
+    }
+
+    public function test_cannot_enrol_non_student_user(): void
+    {
+        // Teacher user (id=2) was created in setUp
+        $response = $this->postJson("/api/school/cohorts/{$this->activeCohort->id}/enrolments", [
+            'student_id' => 2,
+        ], $this->authHeaders());
+
+        $response->assertStatus(422)
+            ->assertJsonFragment(['message' => 'Student not found or not in your school']);
+    }
+
+    public function test_search_enrolments_is_case_insensitive(): void
+    {
+        // Student "Student 1" was created in setUp
+        $response = $this->getJson('/api/school/enrolments?search=student', $this->authHeaders());
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        $this->assertCount(1, $data);
+        $this->assertEquals('Student 1', $data[0]['name']);
+    }
+
+    // ── Pagination ─────────────────────────────────────────────
+
+    public function test_pagination_respects_per_page_for_enrolments(): void
+    {
+        // Create 5 students total
+        for ($i = 2; $i <= 5; $i++) {
+            User::create([
+                'name' => "Student {$i}",
+                'email' => "student{$i}@ridgewood.edu",
+                'password' => bcrypt('password'),
+                'role' => 'student',
+                'school_id' => $this->school->id,
+            ]);
+        }
+
+        $response = $this->getJson('/api/school/enrolments?per_page=2', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('meta.per_page', 2)
+            ->assertJsonPath('meta.total', 5);
+    }
+
+    // ── Tighter assertions ─────────────────────────────────────
+
+    public function test_enrol_response_includes_enrolled_at(): void
+    {
+        $response = $this->postJson("/api/school/cohorts/{$this->activeCohort->id}/enrolments", [
+            'student_id' => $this->student->id,
+        ], $this->authHeaders());
+
+        $response->assertStatus(201);
+        $data = $response->json();
+        $this->assertNotNull($data['enrolled_at']);
+        $this->assertEquals('enrolled', $data['status']);
+        $this->assertEquals($this->activeCohort->id, $data['cohort_id']);
+        $this->assertEquals($this->student->id, $data['student_id']);
+    }
+
+    public function test_remove_sets_removed_at_timestamp(): void
+    {
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        $this->deleteJson(
+            "/api/school/cohorts/{$this->activeCohort->id}/enrolments/{$this->student->id}",
+            [],
+            $this->authHeaders()
+        );
+
+        $enrolment = CohortEnrolment::where('cohort_id', $this->activeCohort->id)
+            ->where('student_id', $this->student->id)
+            ->first();
+
+        $this->assertEquals('removed', $enrolment->status);
+        $this->assertNotNull($enrolment->removed_at);
+    }
+
+    public function test_csv_export_contains_expected_columns(): void
+    {
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        $response = $this->get('/api/school/enrolments/export', $this->authHeaders());
+
+        $response->assertStatus(200);
+        $content = $response->streamedContent();
+        $lines = explode("\n", trim($content));
+
+        // Verify header row contains expected columns
+        $headers = str_getcsv($lines[0]);
+        $this->assertContains('student_name', $headers);
+        $this->assertContains('student_email', $headers);
+        $this->assertContains('cohort_name', $headers);
+        $this->assertContains('experience_name', $headers);
+        $this->assertContains('status', $headers);
+        $this->assertContains('enrolled_at', $headers);
+        $this->assertContains('removed_at', $headers);
+
+        // Verify at least one data row exists
+        $this->assertGreaterThanOrEqual(2, count($lines));
+    }
+
+    public function test_enrolment_overview_shows_correct_assignment_status(): void
+    {
+        // Enrolled student → should be "assigned"
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        $response = $this->getJson('/api/school/enrolments', $this->authHeaders());
+        $response->assertStatus(200);
+
+        $data = $response->json('data');
+        $enrolledStudent = collect($data)->firstWhere('student_id', $this->student->id);
+        $this->assertEquals('assigned', $enrolledStudent['assignment_status']);
+        $this->assertNotEmpty($enrolledStudent['cohort_assignments']);
+    }
+
+    // ── Error envelope consistency ─────────────────────────────
+
+    public function test_all_enrolment_errors_use_standard_envelope(): void
+    {
+        // 404 — nonexistent cohort
+        $response = $this->postJson('/api/school/cohorts/9999/enrolments', [
+            'student_id' => $this->student->id,
+        ], $this->authHeaders());
+        $response->assertJsonStructure(['error', 'message', 'code']);
+        $this->assertTrue($response->json('error'));
+
+        // 422 — inactive cohort
+        $inactiveCohort = Cohort::create([
+            'experience_id' => $this->experience->id,
+            'school_id' => $this->school->id,
+            'name' => 'Inactive',
+            'status' => 'not_started',
+            'start_date' => '2026-04-01',
+            'end_date' => '2026-08-01',
+        ]);
+        $response = $this->postJson("/api/school/cohorts/{$inactiveCohort->id}/enrolments", [
+            'student_id' => $this->student->id,
+        ], $this->authHeaders());
+        $response->assertStatus(422);
+        $response->assertJsonStructure(['error', 'message', 'code']);
+        $this->assertTrue($response->json('error'));
     }
 }

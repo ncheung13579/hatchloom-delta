@@ -10,6 +10,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * D1 mock authentication middleware.
+ *
+ * Maps hardcoded bearer tokens to seeded users instead of validating real JWTs.
+ * This is the same pattern used across all three services. In production, this
+ * will be replaced by Team Quebec's auth service integration.
+ */
 class MockAuthMiddleware
 {
     private const TOKEN_MAP = [

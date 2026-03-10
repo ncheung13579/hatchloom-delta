@@ -13,18 +13,42 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
+/**
+ * Handles student enrolment into cohorts and enrolment data retrieval (Screen 303).
+ *
+ * Provides endpoints for the enrolment overview, enrol/remove operations,
+ * aggregate statistics, and CSV export. Input validation and guard checks
+ * live here; business logic is delegated to EnrolmentService.
+ */
 class EnrolmentController extends Controller
 {
     public function __construct(
         private readonly EnrolmentService $enrolmentService
     ) {}
 
+    /**
+     * List students with their cohort assignments, supporting optional filters.
+     *
+     * Accepts query parameters to narrow results by experience, cohort, or grade
+     * so that school admins can drill into specific slices of the enrolment data
+     * without loading the entire student roster.
+     */
     public function index(Request $request): JsonResponse
     {
         $search = $request->query('search');
         $perPage = (int) $request->query('per_page', 15);
 
-        $overview = $this->enrolmentService->getEnrolmentOverview($search, $perPage);
+        $filters = array_filter([
+            'grade' => $request->query('grade'),
+            'experience_id' => $request->query('experience_id') !== null
+                ? (int) $request->query('experience_id')
+                : null,
+            'cohort_id' => $request->query('cohort_id') !== null
+                ? (int) $request->query('cohort_id')
+                : null,
+        ], fn($value) => $value !== null);
+
+        $overview = $this->enrolmentService->getEnrolmentOverview($search, $perPage, $filters);
 
         return response()->json([
             'data' => $overview->items(),
@@ -37,8 +61,19 @@ class EnrolmentController extends Controller
         ]);
     }
 
+    /**
+     * Enrol a student into a cohort.
+     *
+     * Runs a 5-step validation chain before creating the enrolment:
+     *  1. Find the cohort (404 if missing)
+     *  2. Verify the student exists and belongs to the same school as the admin
+     *  3. Check the cohort is in active status (only active cohorts accept enrolments)
+     *  4. Check the cohort has not reached its capacity limit
+     *  5. Check for duplicate enrolment (including removed ones — re-enrolment is not allowed)
+     */
     public function enrol(Request $request, int $cohortId): JsonResponse
     {
+        // Step 1: Find the cohort
         $cohort = Cohort::find($cohortId);
 
         if (!$cohort) {
@@ -55,7 +90,7 @@ class EnrolmentController extends Controller
 
         $studentId = $validated['student_id'];
 
-        // Verify student belongs to same school
+        // Step 2: Verify student belongs to same school
         $student = User::where('id', $studentId)
             ->where('school_id', Auth::user()->school_id)
             ->where('role', 'student')
@@ -69,7 +104,7 @@ class EnrolmentController extends Controller
             ], 422);
         }
 
-        // Check cohort is active
+        // Step 3: Check cohort is active
         if ($cohort->status !== 'active') {
             return response()->json([
                 'error' => true,
@@ -78,7 +113,7 @@ class EnrolmentController extends Controller
             ], 422);
         }
 
-        // Check capacity
+        // Step 4: Check capacity
         if ($cohort->capacity) {
             $currentCount = $cohort->activeEnrolments()->count();
             if ($currentCount >= $cohort->capacity) {
@@ -90,7 +125,7 @@ class EnrolmentController extends Controller
             }
         }
 
-        // Check for duplicate
+        // Step 5: Check for duplicate (includes removed enrolments — no re-enrolment)
         $existing = CohortEnrolment::where('cohort_id', $cohort->id)
             ->where('student_id', $studentId)
             ->first();
@@ -142,6 +177,28 @@ class EnrolmentController extends Controller
     public function statistics(): JsonResponse
     {
         return response()->json($this->enrolmentService->calculateStatistics());
+    }
+
+    /**
+     * Return detailed enrolment information for a single student.
+     *
+     * Provides all cohort assignments, experience names, and a mock credential
+     * summary so the admin can inspect one student's full enrolment picture
+     * without navigating away from the Enrolment screen (303).
+     */
+    public function studentDetail(int $studentId): JsonResponse
+    {
+        $detail = $this->enrolmentService->getStudentDetail($studentId);
+
+        if ($detail === null) {
+            return response()->json([
+                'error' => true,
+                'message' => 'Student not found',
+                'code' => 'NOT_FOUND',
+            ], 404);
+        }
+
+        return response()->json($detail);
     }
 
     public function export(): StreamedResponse

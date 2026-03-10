@@ -102,8 +102,10 @@ docker compose exec dashboard-service php artisan test
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/school/dashboard` | Aggregated school admin dashboard |
-| GET | `/api/school/dashboard/students/{id}` | Student drill-down detail |
+| GET | `/api/school/dashboard` | Aggregated school admin dashboard (includes summary block) |
+| GET | `/api/school/dashboard/students/{id}` | Student drill-down with credentials and curriculum mapping |
+| GET | `/api/school/dashboard/reporting/pos-coverage` | Per-student Alberta PoS curriculum coverage |
+| GET | `/api/school/dashboard/reporting/engagement` | Student engagement rates and activity metrics |
 | GET | `/api/school/dashboard/health` | Health check |
 
 ### Experience Service (port 8002)
@@ -115,7 +117,9 @@ docker compose exec dashboard-service php artisan test
 | GET | `/api/school/experiences/{id}` | Get experience detail |
 | PUT | `/api/school/experiences/{id}` | Update experience |
 | DELETE | `/api/school/experiences/{id}` | Archive (soft-delete) experience |
-| GET | `/api/school/experiences/{id}/students` | Enrolled students for experience |
+| GET | `/api/school/experiences/{id}/students` | Enrolled students (supports `?search=`) |
+| GET | `/api/school/experiences/{id}/students/{studentId}` | Student drill-down within experience (status + credits) |
+| GET | `/api/school/experiences/{id}/students/export` | Export experience students as CSV |
 | GET | `/api/school/experiences/{id}/contents` | Course contents and delivery |
 | GET | `/api/school/experiences/{id}/statistics` | Experience statistics |
 | GET | `/api/school/experiences/health` | Health check |
@@ -132,7 +136,8 @@ docker compose exec dashboard-service php artisan test
 | PATCH | `/api/school/cohorts/{id}/complete` | Transition cohort to completed |
 | POST | `/api/school/cohorts/{id}/enrolments` | Enrol a student |
 | DELETE | `/api/school/cohorts/{id}/enrolments/{studentId}` | Remove a student (soft delete) |
-| GET | `/api/school/enrolments` | School-wide enrolment overview |
+| GET | `/api/school/enrolments` | School-wide enrolment overview (supports `?search=`, `?experience_id=`, `?cohort_id=`, `?grade=`) |
+| GET | `/api/school/enrolments/students/{studentId}` | Student drill-down from enrolment context |
 | GET | `/api/school/enrolments/statistics` | Enrolment statistics with warnings |
 | GET | `/api/school/enrolments/export` | Export enrolments as CSV |
 | GET | `/api/school/enrolments/health` | Health check |

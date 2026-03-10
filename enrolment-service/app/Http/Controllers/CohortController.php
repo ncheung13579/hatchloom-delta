@@ -9,6 +9,13 @@ use App\Services\CohortService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
+/**
+ * REST controller for cohort management (CRUD + state transitions).
+ *
+ * Handles listing, creating, updating, and retrieving cohorts, as well as
+ * the activate and complete actions that drive the cohort state lifecycle.
+ * All business logic is delegated to CohortService.
+ */
 class CohortController extends Controller
 {
     public function __construct(
@@ -122,6 +129,12 @@ class CohortController extends Controller
         ]);
     }
 
+    /**
+     * Transition a cohort to active status.
+     *
+     * Enforces the state lifecycle: only not_started cohorts can be activated.
+     * Returns 409 Conflict if the transition is invalid.
+     */
     public function activate(int $id): JsonResponse
     {
         $cohort = $this->cohortService->getCohort($id);
@@ -149,6 +162,12 @@ class CohortController extends Controller
         ]);
     }
 
+    /**
+     * Transition a cohort to completed status (terminal state).
+     *
+     * Enforces the state lifecycle: only active cohorts can be completed.
+     * Returns 409 Conflict if the transition is invalid.
+     */
     public function complete(int $id): JsonResponse
     {
         $cohort = $this->cohortService->getCohort($id);

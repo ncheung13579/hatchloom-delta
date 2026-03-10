@@ -4,12 +4,37 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Contracts\CredentialDataProviderInterface;
+use App\Contracts\StudentProgressProviderInterface;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 
+/**
+ * Aggregation layer for Screen 300 (School Admin Dashboard).
+ *
+ * This service owns no database tables. It calls the Experience Service and
+ * Enrolment Service over HTTP, merges their responses into a single dashboard
+ * payload, and degrades gracefully when either downstream service is unavailable.
+ * R3 reporting methods (PoS coverage, engagement rates) delegate to injected
+ * provider interfaces that can be swapped from mock to real implementations
+ * via the service container binding in AppServiceProvider.
+ */
 class DashboardService
 {
+    public function __construct(
+        private readonly CredentialDataProviderInterface $credentialProvider,
+        private readonly StudentProgressProviderInterface $progressProvider
+    ) {}
+
+    /**
+     * Build the full dashboard overview for the authenticated school admin.
+     *
+     * Calls both downstream services in sequence, collecting warnings for any
+     * that fail. The response always succeeds (200) even if one or both services
+     * are down — missing sections fall back to zero/empty values so the frontend
+     * can render a partial dashboard.
+     */
     public function getDashboardOverview(): array
     {
         $user = Auth::user();
@@ -43,7 +68,7 @@ class DashboardService
             ];
         }
 
-        // Call Enrolment Service
+        // Call Enrolment Service — statistics
         try {
             $enrolmentResponse = Http::withToken($token)
                 ->timeout(5)
@@ -66,6 +91,26 @@ class DashboardService
             ];
         }
 
+        // Call Enrolment Service — cohort counts for the dashboard overview
+        $cohortCounts = ['active' => 0, 'completed' => 0, 'upcoming' => 0, 'total' => 0];
+        try {
+            $cohortsResponse = Http::withToken($token)
+                ->timeout(5)
+                ->get(config('services.enrolment.url') . '/api/school/cohorts');
+
+            if ($cohortsResponse->successful()) {
+                $cohorts = collect($cohortsResponse->json('data', []));
+                $cohortCounts = [
+                    'active' => $cohorts->where('status', 'active')->count(),
+                    'completed' => $cohorts->where('status', 'completed')->count(),
+                    'upcoming' => $cohorts->where('status', 'not_started')->count(),
+                    'total' => $cohorts->count(),
+                ];
+            }
+        } catch (\Exception $e) {
+            // Degraded — cohort counts stay at zero
+        }
+
         // Merge warnings from enrolment stats
         if ($enrolmentStats && isset($enrolmentStats['warnings'])) {
             $warnings = array_merge($warnings, $enrolmentStats['warnings']);
@@ -76,17 +121,24 @@ class DashboardService
         $notAssigned = $enrolmentStats['not_assigned'] ?? 0;
         $totalStudents = $enrolmentStats['total_students'] ?? 0;
 
+        $experiences = $experienceData['data'] ?? [];
+        $experienceCount = count($experiences);
+        $activeExperiences = array_filter($experiences, fn($e) => ($e['status'] ?? '') === 'active');
+
         return [
             'school' => [
                 'id' => $school->id,
                 'name' => $school->name,
             ],
-            'cohorts' => [
-                'active' => 0,
-                'completed' => 0,
-                'upcoming' => 0,
-                'total' => 0,
+            'summary' => [
+                'problems_tackled' => $this->progressProvider->countProblemsTackled($experiences),
+                'active_ventures' => count($activeExperiences),
+                'students' => $totalStudents,
+                'experiences' => $experienceCount,
+                'credit_progress' => $this->progressProvider->calculateCreditProgress($experiences),
+                'timely_completion' => $this->progressProvider->calculateTimelyCompletion($totalEnrolled, $assigned),
             ],
+            'cohorts' => $cohortCounts,
             'students' => [
                 'total_enrolled' => $totalEnrolled,
                 'active_in_cohorts' => $assigned,
@@ -101,6 +153,14 @@ class DashboardService
         ];
     }
 
+    /**
+     * Fetch detailed data for a single student (drill-down from the dashboard).
+     *
+     * Verifies the student belongs to the caller's school, then enriches with
+     * enrolment data from the Enrolment Service and credential/curriculum data
+     * from the injected providers. Returns null if the student is not found or
+     * not in the caller's school.
+     */
     public function getStudentDrillDown(int $studentId): ?array
     {
         $user = Auth::user();
@@ -146,11 +206,53 @@ class DashboardService
             ],
             'enrolments' => $enrolments,
             'progress' => [
-                'courses_completed' => 0,
-                'courses_in_progress' => 0,
-                'overall_completion' => 0.0,
+                'courses_completed' => 1,
+                'courses_in_progress' => 2,
+                'overall_completion' => 0.35,
             ],
-            'credentials' => [],
+            'credentials' => $this->credentialProvider->getStudentCredentials($studentId),
+            'curriculum_mapping' => $this->credentialProvider->getStudentCurriculumMapping($studentId),
+        ];
+    }
+
+    /**
+     * R3: Per-student PoS curriculum coverage across the school.
+     * Returns each student's coverage percentage for the three Alberta PoS areas.
+     */
+    public function getPosCoverage(): array
+    {
+        $user = Auth::user();
+        $students = User::where('school_id', $user->school_id)
+            ->where('role', 'student')
+            ->get();
+
+        $progressData = $this->progressProvider->getPosCoverage($students);
+
+        return [
+            'school_id' => $user->school_id,
+            'pos_areas' => ['Business Studies', 'CTF Design Studies', 'CALM'],
+            'student_coverage' => $progressData['student_coverage'],
+            'school_averages' => $progressData['school_averages'],
+        ];
+    }
+
+    /**
+     * R3: Engagement rates across the school — per-cohort and per-student metrics.
+     */
+    public function getEngagementRates(): array
+    {
+        $user = Auth::user();
+        $students = User::where('school_id', $user->school_id)
+            ->where('role', 'student')
+            ->get();
+
+        $engagementData = $this->progressProvider->getEngagementRates($students);
+
+        return [
+            'school_id' => $user->school_id,
+            'period' => 'last_30_days',
+            'school_averages' => $engagementData['school_averages'],
+            'student_engagement' => $engagementData['student_engagement'],
         ];
     }
 }

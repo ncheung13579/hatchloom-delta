@@ -19,15 +19,17 @@ Seeds: schools, users, 2 experiences, 5 experience-course mappings.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/experiences` | List experiences |
-| POST | `/api/experiences` | Create experience |
-| GET | `/api/experiences/{id}` | Get experience detail |
-| PUT | `/api/experiences/{id}` | Update experience |
-| DELETE | `/api/experiences/{id}` | Archive experience |
-| GET | `/api/experiences/{id}/students` | Enrolled students |
-| GET | `/api/experiences/{id}/contents` | Course contents |
-| GET | `/api/experiences/{id}/statistics` | Statistics |
-| GET | `/api/experiences/health` | Health check |
+| GET | `/api/school/experiences` | List experiences (supports `?search=`, `?page=`, `?per_page=`) |
+| POST | `/api/school/experiences` | Create new experience |
+| GET | `/api/school/experiences/{id}` | Get experience detail |
+| PUT | `/api/school/experiences/{id}` | Update experience |
+| DELETE | `/api/school/experiences/{id}` | Archive (soft-delete) experience |
+| GET | `/api/school/experiences/{id}/students` | Enrolled students (supports `?search=`) |
+| GET | `/api/school/experiences/{id}/students/{studentId}` | Student drill-down within experience |
+| GET | `/api/school/experiences/{id}/students/export` | Export experience students as CSV |
+| GET | `/api/school/experiences/{id}/contents` | Course contents and delivery |
+| GET | `/api/school/experiences/{id}/statistics` | Experience statistics |
+| GET | `/api/school/experiences/health` | Health check |
 
 ## Running Tests
 

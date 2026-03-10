@@ -14,9 +14,13 @@ Route::prefix('school')->group(function () {
     ]));
 
     Route::middleware('mock.auth')->group(function () {
-        Route::apiResource('experiences', ExperienceController::class);
+        // Screen 302 sub-resource routes must be registered before the
+        // apiResource to prevent the {id} wildcard from swallowing them.
+        Route::get('experiences/{id}/students/export', [ExperienceScreenController::class, 'exportStudents']);
+        Route::get('experiences/{id}/students/{studentId}', [ExperienceScreenController::class, 'studentDetail']);
         Route::get('experiences/{id}/students', [ExperienceScreenController::class, 'students']);
         Route::get('experiences/{id}/contents', [ExperienceScreenController::class, 'contents']);
         Route::get('experiences/{id}/statistics', [ExperienceScreenController::class, 'statistics']);
+        Route::apiResource('experiences', ExperienceController::class);
     });
 });

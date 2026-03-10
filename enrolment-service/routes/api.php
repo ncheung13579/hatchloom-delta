@@ -21,6 +21,7 @@ Route::prefix('school')->group(function () {
         Route::delete('cohorts/{cohortId}/enrolments/{studentId}', [EnrolmentController::class, 'remove']);
         Route::get('enrolments', [EnrolmentController::class, 'index']);
         Route::get('enrolments/statistics', [EnrolmentController::class, 'statistics']);
+        Route::get('enrolments/students/{studentId}', [EnrolmentController::class, 'studentDetail']);
         Route::get('enrolments/export', [EnrolmentController::class, 'export']);
     });
 });

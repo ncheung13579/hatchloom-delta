@@ -10,6 +10,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * An Experience is a curated collection of courses assembled by a teacher,
+ * belonging to a single school.
+ *
+ * Think of it as a "curriculum package" — the template from which Cohorts
+ * (live running instances with enrolled students) are created. Uses soft
+ * deletes so archived Experiences remain available for audit and reporting.
+ * Automatically scoped to the authenticated user's school via SchoolScope.
+ */
 class Experience extends Model
 {
     use SoftDeletes;
