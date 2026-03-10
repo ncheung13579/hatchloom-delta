@@ -33,21 +33,13 @@ jobs:
           php-version: '8.2'
           extensions: pdo_pgsql
       - run: composer install --prefer-dist --no-progress
-      - run: cp .env.example .env && php artisan key:generate
+      - run: |
+          cp .env.example .env
+          sed -i 's/DB_HOST=.*/DB_HOST=localhost/' .env
+          sed -i 's/DB_DATABASE=.*/DB_DATABASE=hatchloom_test/' .env
+          php artisan key:generate
       - run: php artisan migrate --force
-        env:
-          DB_CONNECTION: pgsql
-          DB_HOST: localhost
-          DB_DATABASE: hatchloom_test
-          DB_USERNAME: hatchloom
-          DB_PASSWORD: secret
       - run: php artisan test
-        env:
-          DB_CONNECTION: pgsql
-          DB_HOST: localhost
-          DB_DATABASE: hatchloom_test
-          DB_USERNAME: hatchloom
-          DB_PASSWORD: secret
 
   test-enrolment-service:
     runs-on: ubuntu-latest
@@ -75,21 +67,13 @@ jobs:
           php-version: '8.2'
           extensions: pdo_pgsql
       - run: composer install --prefer-dist --no-progress
-      - run: cp .env.example .env && php artisan key:generate
+      - run: |
+          cp .env.example .env
+          sed -i 's/DB_HOST=.*/DB_HOST=localhost/' .env
+          sed -i 's/DB_DATABASE=.*/DB_DATABASE=hatchloom_test/' .env
+          php artisan key:generate
       - run: php artisan migrate --force
-        env:
-          DB_CONNECTION: pgsql
-          DB_HOST: localhost
-          DB_DATABASE: hatchloom_test
-          DB_USERNAME: hatchloom
-          DB_PASSWORD: secret
       - run: php artisan test
-        env:
-          DB_CONNECTION: pgsql
-          DB_HOST: localhost
-          DB_DATABASE: hatchloom_test
-          DB_USERNAME: hatchloom
-          DB_PASSWORD: secret
 
   test-dashboard-service:
     runs-on: ubuntu-latest
