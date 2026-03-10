@@ -36,12 +36,14 @@ jobs:
       - run: cp .env.example .env && php artisan key:generate
       - run: php artisan migrate --force
         env:
+          DB_CONNECTION: pgsql
           DB_HOST: localhost
           DB_DATABASE: hatchloom_test
           DB_USERNAME: hatchloom
           DB_PASSWORD: secret
       - run: php artisan test
         env:
+          DB_CONNECTION: pgsql
           DB_HOST: localhost
           DB_DATABASE: hatchloom_test
           DB_USERNAME: hatchloom
@@ -76,12 +78,14 @@ jobs:
       - run: cp .env.example .env && php artisan key:generate
       - run: php artisan migrate --force
         env:
+          DB_CONNECTION: pgsql
           DB_HOST: localhost
           DB_DATABASE: hatchloom_test
           DB_USERNAME: hatchloom
           DB_PASSWORD: secret
       - run: php artisan test
         env:
+          DB_CONNECTION: pgsql
           DB_HOST: localhost
           DB_DATABASE: hatchloom_test
           DB_USERNAME: hatchloom
