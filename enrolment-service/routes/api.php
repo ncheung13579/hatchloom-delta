@@ -14,7 +14,7 @@ Route::prefix('school')->group(function () {
     ]));
 
     Route::middleware('mock.auth')->group(function () {
-        Route::apiResource('cohorts', CohortController::class);
+        Route::apiResource('cohorts', CohortController::class)->except(['destroy']);
         Route::patch('cohorts/{id}/activate', [CohortController::class, 'activate']);
         Route::patch('cohorts/{id}/complete', [CohortController::class, 'complete']);
         Route::post('cohorts/{cohortId}/enrolments', [EnrolmentController::class, 'enrol']);

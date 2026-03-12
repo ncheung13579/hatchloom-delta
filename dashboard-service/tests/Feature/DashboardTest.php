@@ -481,4 +481,276 @@ class DashboardTest extends TestCase
 
         $response->assertStatus(401);
     }
+
+    // ── Widget endpoint tests ─────────────────────────────────
+
+    /**
+     * GET /widgets returns all 3 registered widget types in a single response.
+     */
+    public function test_widgets_returns_all_three_widget_types(): void
+    {
+        Http::fake([
+            '*/api/school/experiences*' => Http::response([
+                'data' => [
+                    ['id' => 1, 'name' => 'Business Foundations', 'status' => 'active'],
+                ],
+                'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 1],
+            ]),
+            '*/api/school/cohorts' => Http::response([
+                'data' => [
+                    ['id' => 1, 'name' => 'Cohort A', 'status' => 'active', 'student_count' => 5],
+                ],
+            ]),
+            '*/api/school/enrolments/statistics*' => Http::response([
+                'total_students' => 10,
+                'enrolled' => 8,
+                'assigned' => 7,
+                'not_assigned' => 3,
+                'removed' => 0,
+                'warnings' => [],
+            ]),
+            '*/api/school/enrolments' => Http::response([
+                'data' => [],
+                'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 0],
+            ]),
+        ]);
+
+        $response = $this->getJson('/api/school/dashboard/widgets', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'widgets' => [
+                    '*' => ['type', 'data'],
+                ],
+            ]);
+
+        $data = $response->json();
+        $this->assertCount(3, $data['widgets']);
+
+        $widgetTypes = array_column($data['widgets'], 'type');
+        $this->assertContains('cohort_summary', $widgetTypes);
+        $this->assertContains('student_table', $widgetTypes);
+        $this->assertContains('engagement_chart', $widgetTypes);
+    }
+
+    /**
+     * GET /widgets/cohort_summary returns the correct data structure with
+     * school info, cohort counts, student counts, statistics, and warnings.
+     */
+    public function test_widget_cohort_summary_returns_correct_structure(): void
+    {
+        Http::fake([
+            '*/api/school/experiences*' => Http::response([
+                'data' => [
+                    ['id' => 1, 'name' => 'Exp A', 'status' => 'active'],
+                    ['id' => 2, 'name' => 'Exp B', 'status' => 'archived'],
+                ],
+                'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 2],
+            ]),
+            '*/api/school/cohorts' => Http::response([
+                'data' => [
+                    ['id' => 1, 'name' => 'Cohort A', 'status' => 'active', 'student_count' => 5],
+                    ['id' => 2, 'name' => 'Cohort B', 'status' => 'completed', 'student_count' => 3],
+                    ['id' => 3, 'name' => 'Cohort C', 'status' => 'not_started', 'student_count' => 0],
+                ],
+            ]),
+            '*/api/school/enrolments/statistics*' => Http::response([
+                'total_students' => 10,
+                'enrolled' => 8,
+                'assigned' => 6,
+                'not_assigned' => 4,
+                'removed' => 1,
+                'warnings' => [],
+            ]),
+        ]);
+
+        $response = $this->getJson('/api/school/dashboard/widgets/cohort_summary', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'type',
+                'data' => [
+                    'school' => ['id', 'name'],
+                    'cohorts' => ['active', 'completed', 'upcoming', 'total'],
+                    'students' => ['total_enrolled', 'active_in_cohorts', 'not_assigned'],
+                    'statistics' => [
+                        'enrolment_rate',
+                        'credit_progress',
+                        'timely_completion',
+                        'problems_tackled',
+                        'active_ventures',
+                    ],
+                    'warnings',
+                ],
+            ]);
+
+        $data = $response->json();
+        $this->assertEquals('cohort_summary', $data['type']);
+        $this->assertEquals($this->school->id, $data['data']['school']['id']);
+        $this->assertEquals('Ridgewood Academy', $data['data']['school']['name']);
+        $this->assertEquals(1, $data['data']['cohorts']['active']);
+        $this->assertEquals(1, $data['data']['cohorts']['completed']);
+        $this->assertEquals(1, $data['data']['cohorts']['upcoming']);
+        $this->assertEquals(3, $data['data']['cohorts']['total']);
+        $this->assertEquals(8, $data['data']['students']['total_enrolled']);
+        $this->assertEquals(6, $data['data']['students']['active_in_cohorts']);
+        $this->assertEquals(1, $data['data']['statistics']['active_ventures']);
+    }
+
+    /**
+     * GET /widgets/student_table returns a student list with enrolment status
+     * and cohort counts for each student in the school.
+     */
+    public function test_widget_student_table_returns_correct_structure(): void
+    {
+        Http::fake([
+            '*/api/school/experiences*' => Http::response([
+                'data' => [],
+                'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 0],
+            ]),
+            '*/api/school/enrolments' => Http::response([
+                'data' => [
+                    [
+                        'student_id' => $this->student->id,
+                        'name' => 'Student 1',
+                        'email' => 'student1@ridgewood.edu',
+                        'cohort_assignments' => [
+                            ['cohort_id' => 1, 'cohort_name' => 'Cohort A', 'status' => 'active'],
+                        ],
+                        'assignment_status' => 'assigned',
+                        'last_active_at' => '2026-03-10T12:00:00Z',
+                    ],
+                ],
+                'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 1],
+            ]),
+        ]);
+
+        $response = $this->getJson('/api/school/dashboard/widgets/student_table', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'type',
+                'data' => [
+                    'total_students',
+                    'students' => [
+                        '*' => [
+                            'student_id',
+                            'name',
+                            'email',
+                            'status',
+                            'cohort_count',
+                            'active_cohort_count',
+                            'last_active_at',
+                        ],
+                    ],
+                ],
+            ]);
+
+        $data = $response->json();
+        $this->assertEquals('student_table', $data['type']);
+        $this->assertEquals(1, $data['data']['total_students']);
+        $this->assertCount(1, $data['data']['students']);
+        $this->assertEquals($this->student->id, $data['data']['students'][0]['student_id']);
+        $this->assertEquals('Student 1', $data['data']['students'][0]['name']);
+        $this->assertEquals('enrolled', $data['data']['students'][0]['status']);
+        $this->assertEquals(1, $data['data']['students'][0]['cohort_count']);
+        $this->assertEquals(1, $data['data']['students'][0]['active_cohort_count']);
+    }
+
+    /**
+     * GET /widgets/engagement_chart returns engagement metrics with distribution
+     * buckets, school averages, and per-student metrics.
+     */
+    public function test_widget_engagement_chart_returns_correct_structure(): void
+    {
+        Http::fake([
+            '*/api/school/experiences*' => Http::response([
+                'data' => [],
+                'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 0],
+            ]),
+        ]);
+
+        $response = $this->getJson('/api/school/dashboard/widgets/engagement_chart', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'type',
+                'data' => [
+                    'period',
+                    'school_averages' => [
+                        'avg_login_days',
+                        'avg_completion_rate',
+                        'active_student_count',
+                    ],
+                    'distribution' => ['low', 'moderate', 'good', 'excellent'],
+                    'student_metrics' => [
+                        '*' => [
+                            'student_id',
+                            'student_name',
+                            'login_days',
+                            'completion_rate',
+                            'activities_completed',
+                            'total_activities',
+                            'last_active_at',
+                            'engagement_level',
+                        ],
+                    ],
+                ],
+            ]);
+
+        $data = $response->json();
+        $this->assertEquals('engagement_chart', $data['type']);
+        $this->assertEquals('last_30_days', $data['data']['period']);
+        $this->assertNotEmpty($data['data']['student_metrics']);
+        // Engagement level must be one of the valid classification values
+        $validLevels = ['low', 'moderate', 'good', 'excellent'];
+        foreach ($data['data']['student_metrics'] as $metric) {
+            $this->assertContains($metric['engagement_level'], $validLevels);
+        }
+    }
+
+    /**
+     * GET /widgets/invalid_type returns 422 with the standard error format.
+     */
+    public function test_widget_invalid_type_returns_422(): void
+    {
+        Http::fake([
+            '*/api/school/experiences*' => Http::response([
+                'data' => [],
+                'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 0],
+            ]),
+        ]);
+
+        $response = $this->getJson('/api/school/dashboard/widgets/invalid_type', $this->authHeaders());
+
+        $response->assertStatus(422)
+            ->assertJsonStructure([
+                'error',
+                'message',
+                'code',
+            ]);
+
+        $data = $response->json();
+        $this->assertTrue($data['error']);
+        $this->assertEquals('VALIDATION_ERROR', $data['code']);
+        $this->assertStringContainsString('invalid_type', $data['message']);
+    }
+
+    /**
+     * Widgets endpoints return 401 when no auth token is provided.
+     */
+    public function test_widgets_endpoint_requires_authentication(): void
+    {
+        $response = $this->getJson('/api/school/dashboard/widgets');
+        $response->assertStatus(401);
+    }
+
+    /**
+     * Single widget endpoint returns 401 when no auth token is provided.
+     */
+    public function test_single_widget_endpoint_requires_authentication(): void
+    {
+        $response = $this->getJson('/api/school/dashboard/widgets/cohort_summary');
+        $response->assertStatus(401);
+    }
 }

@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Events\StudentEnrolled;
+use App\Events\StudentRemoved;
 use App\Models\Cohort;
 use App\Models\CohortEnrolment;
 use App\Models\Experience;
 use App\Models\School;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
 
 class EnrolmentTest extends TestCase
@@ -742,5 +745,96 @@ class EnrolmentTest extends TestCase
         $response->assertStatus(422);
         $response->assertJsonStructure(['error', 'message', 'code']);
         $this->assertTrue($response->json('error'));
+    }
+
+    // ── Observer pattern / Event dispatch tests ───────────────
+
+    /**
+     * Verify that enrolling a student dispatches the StudentEnrolled event.
+     */
+    public function test_enrolling_student_dispatches_student_enrolled_event(): void
+    {
+        Event::fake([StudentEnrolled::class]);
+
+        $this->postJson("/api/school/cohorts/{$this->activeCohort->id}/enrolments", [
+            'student_id' => $this->student->id,
+        ], $this->authHeaders());
+
+        Event::assertDispatched(StudentEnrolled::class);
+    }
+
+    /**
+     * Verify that removing a student dispatches the StudentRemoved event.
+     */
+    public function test_removing_student_dispatches_student_removed_event(): void
+    {
+        // Enrol first (without faking events, so the enrolment actually persists)
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        Event::fake([StudentRemoved::class]);
+
+        $this->deleteJson(
+            "/api/school/cohorts/{$this->activeCohort->id}/enrolments/{$this->student->id}",
+            [],
+            $this->authHeaders()
+        );
+
+        Event::assertDispatched(StudentRemoved::class);
+    }
+
+    /**
+     * Verify that the StudentEnrolled event carries the correct cohort and enrolment data.
+     */
+    public function test_student_enrolled_event_carries_correct_data(): void
+    {
+        Event::fake([StudentEnrolled::class]);
+
+        $this->postJson("/api/school/cohorts/{$this->activeCohort->id}/enrolments", [
+            'student_id' => $this->student->id,
+        ], $this->authHeaders());
+
+        Event::assertDispatched(StudentEnrolled::class, function (StudentEnrolled $event) {
+            return $event->enrolment->student_id === $this->student->id
+                && $event->enrolment->cohort_id === $this->activeCohort->id
+                && $event->enrolment->status === 'enrolled'
+                && $event->cohort->id === $this->activeCohort->id
+                && $event->cohort->school_id === $this->school->id;
+        });
+    }
+
+    /**
+     * Verify that the StudentRemoved event carries correct data including the removedAt timestamp.
+     */
+    public function test_student_removed_event_carries_correct_data_with_removed_at(): void
+    {
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        Event::fake([StudentRemoved::class]);
+
+        $this->deleteJson(
+            "/api/school/cohorts/{$this->activeCohort->id}/enrolments/{$this->student->id}",
+            [],
+            $this->authHeaders()
+        );
+
+        Event::assertDispatched(StudentRemoved::class, function (StudentRemoved $event) {
+            return $event->enrolment->student_id === $this->student->id
+                && $event->enrolment->cohort_id === $this->activeCohort->id
+                && $event->enrolment->status === 'removed'
+                && $event->cohort->id === $this->activeCohort->id
+                && $event->cohort->school_id === $this->school->id
+                && $event->removedAt instanceof \DateTimeInterface
+                && $event->removedAt == $event->enrolment->removed_at;
+        });
     }
 }
