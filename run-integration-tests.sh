@@ -402,6 +402,140 @@ assert_contains '"Cross-Service Cohort"' "New cohort visible in experience servi
 do_request GET "$DASHBOARD/api/school/dashboard"
 assert_status 200 "Dashboard reflects new cohort"
 
+# ── 10. Dashboard Widgets (Factory Method) ───────────────────────
+echo ""
+echo "--- Dashboard Widgets ---"
+
+# All widgets endpoint
+do_request GET "$DASHBOARD/api/school/dashboard/widgets"
+assert_status 200 "All widgets endpoint returns 200"
+assert_contains '"cohort_summary"' "Widgets include cohort_summary"
+assert_contains '"student_table"' "Widgets include student_table"
+assert_contains '"engagement_chart"' "Widgets include engagement_chart"
+
+# Individual widget endpoints
+do_request GET "$DASHBOARD/api/school/dashboard/widgets/cohort_summary"
+assert_status 200 "Cohort summary widget returns 200"
+assert_contains '"type"' "Widget response has type field"
+assert_contains '"data"' "Widget response has data field"
+
+do_request GET "$DASHBOARD/api/school/dashboard/widgets/student_table"
+assert_status 200 "Student table widget returns 200"
+
+do_request GET "$DASHBOARD/api/school/dashboard/widgets/engagement_chart"
+assert_status 200 "Engagement chart widget returns 200"
+
+# Invalid widget type
+do_request GET "$DASHBOARD/api/school/dashboard/widgets/nonexistent_widget"
+assert_status 422 "Invalid widget type returns 422"
+assert_contains '"VALIDATION_ERROR"' "Invalid widget has correct error code"
+
+# ── 11. Cohort Search ────────────────────────────────────────────
+echo ""
+echo "--- Cohort Search ---"
+
+# Search by name (case-insensitive partial match)
+do_request GET "$ENROLMENT/api/school/cohorts?search=cohort%20a"
+assert_status 200 "Cohort search returns 200"
+assert_contains '"Cohort A"' "Search finds Cohort A"
+
+# Search with no matches
+do_request GET "$ENROLMENT/api/school/cohorts?search=zzzznonexistent"
+assert_status 200 "Empty search returns 200"
+
+# Combined search + status filter
+do_request GET "$ENROLMENT/api/school/cohorts?search=cohort&status=active"
+assert_status 200 "Combined search + status filter returns 200"
+
+# ── 12. Enrolment Filters ───────────────────────────────────────
+echo ""
+echo "--- Enrolment Filters ---"
+
+# Filter by student_id
+do_request GET "$ENROLMENT/api/school/enrolments?student_id=4"
+assert_status 200 "Filter enrolments by student_id returns 200"
+assert_contains '"data"' "Filtered enrolments has data wrapper"
+
+# Filter by experience_id
+do_request GET "$ENROLMENT/api/school/enrolments?experience_id=1"
+assert_status 200 "Filter enrolments by experience_id returns 200"
+
+# ── 13. Removed Count in Cohorts ────────────────────────────────
+echo ""
+echo "--- Removed Count ---"
+
+# Cohort show should include removed_count
+do_request GET "$ENROLMENT/api/school/cohorts/1"
+assert_status 200 "Cohort 1 show returns 200"
+assert_contains '"removed_count"' "Cohort show includes removed_count"
+
+# Cohort list should include removed_count
+do_request GET "$ENROLMENT/api/school/cohorts"
+assert_status 200 "Cohort list returns 200"
+assert_contains '"removed_count"' "Cohort list includes removed_count"
+
+# ── 14. Experience → Enrolment: Real Student Data ───────────────
+echo ""
+echo "--- Cross-Service: Real Student Data ---"
+
+# Experience students list should return individual student records
+do_request GET "$EXPERIENCE/api/school/experiences/1/students"
+assert_status 200 "Experience students returns 200"
+assert_contains '"student_id"' "Students list has individual student_id fields"
+assert_contains '"student_name"' "Students list has student_name"
+assert_contains '"student_email"' "Students list has student_email"
+
+# Experience cohort_count should be real (not zero)
+do_request GET "$EXPERIENCE/api/school/experiences"
+assert_status 200 "Experience list returns 200"
+assert_contains '"cohort_count"' "Experience list includes cohort_count"
+
+# Experience statistics should include real removed count
+do_request GET "$EXPERIENCE/api/school/experiences/1/statistics"
+assert_status 200 "Experience statistics returns 200"
+assert_contains '"removed"' "Statistics includes removed count"
+
+# Student detail via experience service should use real lookup
+do_request GET "$EXPERIENCE/api/school/experiences/1/students/4"
+assert_status 200 "Student detail in experience returns 200"
+assert_contains '"student_name"' "Student detail has student_name"
+assert_contains '"enrolled_at"' "Student detail has enrolled_at"
+
+# Nonexistent student in experience returns 404
+do_request GET "$EXPERIENCE/api/school/experiences/1/students/9999"
+assert_status 404 "Nonexistent student in experience returns 404"
+
+# ── 15. Dashboard Student Drill-Down by ID ──────────────────────
+echo ""
+echo "--- Dashboard: Student Drill-Down ---"
+
+# Drill-down should work by student ID (not name search)
+do_request GET "$DASHBOARD/api/school/dashboard/students/4"
+assert_status 200 "Student drill-down by ID returns 200"
+assert_contains '"student"' "Drill-down has student section"
+assert_contains '"enrolments"' "Drill-down has enrolments section"
+
+# Nonexistent student
+do_request GET "$DASHBOARD/api/school/dashboard/students/9999"
+assert_status 404 "Nonexistent student drill-down returns 404"
+
+# ── 16. Audit Log Middleware (verify no errors on mutating requests)
+echo ""
+echo "--- Audit Middleware Smoke Test ---"
+
+# POST, PATCH, DELETE should all still succeed (middleware doesn't block)
+do_request POST "$ENROLMENT/api/school/cohorts" \
+    '{"experience_id":1,"name":"Audit Test Cohort","start_date":"2026-11-01","end_date":"2026-12-31","capacity":5}'
+assert_status 201 "POST with audit middleware succeeds"
+AUDIT_COHORT_ID=$(json_val "id")
+
+do_request PATCH "$ENROLMENT/api/school/cohorts/${AUDIT_COHORT_ID}/activate" '{}'
+assert_status 200 "PATCH with audit middleware succeeds"
+
+do_request PUT "$ENROLMENT/api/school/cohorts/${AUDIT_COHORT_ID}" \
+    '{"name":"Audit Test Updated","capacity":10}'
+assert_status 200 "PUT with audit middleware succeeds"
+
 # ═════════════════════════════════════════════════════════════════
 echo ""
 echo "============================================="
