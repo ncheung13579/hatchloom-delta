@@ -17,5 +17,7 @@ Route::prefix('school')->group(function () {
         Route::get('dashboard/students/{studentId}', [DashboardController::class, 'studentDrillDown']);
         Route::get('dashboard/reporting/pos-coverage', [DashboardController::class, 'posCoverage']);
         Route::get('dashboard/reporting/engagement', [DashboardController::class, 'engagement']);
+        Route::get('dashboard/widgets', [DashboardController::class, 'widgets']);
+        Route::get('dashboard/widgets/{type}', [DashboardController::class, 'widget']);
     });
 });

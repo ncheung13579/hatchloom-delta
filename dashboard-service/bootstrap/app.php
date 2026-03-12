@@ -14,6 +14,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'mock.auth' => \App\Http\Middleware\MockAuthMiddleware::class,
         ]);
+        $middleware->appendToGroup('api', [
+            \App\Http\Middleware\AuditLogMiddleware::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

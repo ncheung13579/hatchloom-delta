@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Contracts\CredentialDataProviderInterface;
+use App\Events\StudentEnrolled;
+use App\Events\StudentRemoved;
 use App\Models\Cohort;
 use App\Models\CohortEnrolment;
 use App\Models\User;
@@ -122,12 +124,21 @@ class EnrolmentService
 
     public function enrolStudent(Cohort $cohort, int $studentId): CohortEnrolment
     {
-        return CohortEnrolment::create([
+        $enrolment = CohortEnrolment::create([
             'cohort_id' => $cohort->id,
             'student_id' => $studentId,
             'status' => 'enrolled',
             'enrolled_at' => now(),
         ]);
+
+        // Load relationships so listeners have access to student/cohort details
+        // without issuing additional queries.
+        $enrolment->load(['student', 'cohort.experience']);
+        $cohort->load(['teacher', 'experience']);
+
+        StudentEnrolled::dispatch($enrolment, $cohort);
+
+        return $enrolment;
     }
 
     public function removeStudent(Cohort $cohort, int $studentId): ?CohortEnrolment
@@ -142,6 +153,13 @@ class EnrolmentService
         }
 
         $enrolment->remove();
+
+        // Load relationships so listeners have access to student/cohort details.
+        $enrolment->load(['student', 'cohort.experience']);
+        $cohort->load(['teacher', 'experience']);
+
+        StudentRemoved::dispatch($enrolment, $cohort, $enrolment->removed_at);
+
         return $enrolment;
     }
 

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Contracts\CredentialDataProviderInterface;
+use App\Contracts\DashboardWidget;
 use App\Contracts\StudentProgressProviderInterface;
+use App\Factories\DashboardWidgetFactory;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -24,7 +26,8 @@ class DashboardService
 {
     public function __construct(
         private readonly CredentialDataProviderInterface $credentialProvider,
-        private readonly StudentProgressProviderInterface $progressProvider
+        private readonly StudentProgressProviderInterface $progressProvider,
+        private readonly DashboardWidgetFactory $widgetFactory
     ) {}
 
     /**
@@ -254,5 +257,99 @@ class DashboardService
             'school_averages' => $engagementData['school_averages'],
             'student_engagement' => $engagementData['student_engagement'],
         ];
+    }
+
+    /**
+     * Build a single dashboard widget by type using the Factory Method pattern.
+     *
+     * Constructs a shared context array from the authenticated user's school
+     * and current request, then delegates to DashboardWidgetFactory::create()
+     * which returns the appropriate DashboardWidget implementation.
+     */
+    public function getWidget(string $type): array
+    {
+        $widget = $this->buildWidget($type);
+
+        return [
+            'type' => $widget->getType(),
+            'data' => $widget->getData(),
+        ];
+    }
+
+    /**
+     * Build all registered dashboard widgets and return their data.
+     *
+     * This powers a "full widgets" endpoint that returns every widget in a
+     * single response, keyed by widget type. Useful for initial dashboard
+     * load where the frontend needs all sections at once.
+     */
+    public function getAllWidgets(): array
+    {
+        $types = $this->widgetFactory->getAvailableTypes();
+        $widgets = [];
+
+        foreach ($types as $type) {
+            $widget = $this->buildWidget($type);
+            $widgets[] = [
+                'type' => $widget->getType(),
+                'data' => $widget->getData(),
+            ];
+        }
+
+        return ['widgets' => $widgets];
+    }
+
+    /**
+     * Instantiate a DashboardWidget via the factory with the shared context.
+     *
+     * The context array carries everything widgets need: the bearer token for
+     * downstream HTTP calls, the school identity for scoping, experience data
+     * fetched from the Experience Service, and the injected provider instances.
+     */
+    private function buildWidget(string $type): DashboardWidget
+    {
+        $user = Auth::user();
+        $school = $user->school;
+        $token = request()->bearerToken();
+
+        // Pre-fetch experience data so widgets that need it don't each make
+        // their own HTTP call to the Experience Service
+        $experiences = $this->fetchExperiences($token);
+
+        $context = [
+            'token' => $token,
+            'school_id' => $school->id,
+            'school_name' => $school->name,
+            'experiences' => $experiences,
+            'progress_provider' => $this->progressProvider,
+            'credential_provider' => $this->credentialProvider,
+        ];
+
+        return $this->widgetFactory->create($type, $context);
+    }
+
+    /**
+     * Fetch experience data from the Experience Service.
+     *
+     * Shared helper so multiple widgets can reuse the same experience list
+     * without each one making a separate HTTP call.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchExperiences(string $token): array
+    {
+        try {
+            $response = Http::withToken($token)
+                ->timeout(5)
+                ->get(config('services.experience.url') . '/api/school/experiences');
+
+            if ($response->successful()) {
+                return $response->json('data', []);
+            }
+        } catch (\Exception $e) {
+            // Degraded — return empty array
+        }
+
+        return [];
     }
 }

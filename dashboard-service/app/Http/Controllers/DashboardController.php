@@ -52,4 +52,34 @@ class DashboardController extends Controller
     {
         return response()->json($this->dashboardService->getEngagementRates());
     }
+
+    /**
+     * Return all dashboard widgets in a single response.
+     *
+     * Uses the Factory Method pattern via DashboardWidgetFactory to build
+     * each widget type and collect their data payloads.
+     */
+    public function widgets(): JsonResponse
+    {
+        return response()->json($this->dashboardService->getAllWidgets());
+    }
+
+    /**
+     * Return a single dashboard widget by type.
+     *
+     * Accepts the widget type as a URL segment (e.g. cohort_summary,
+     * student_table, engagement_chart). Returns 422 if the type is unknown.
+     */
+    public function widget(string $type): JsonResponse
+    {
+        try {
+            return response()->json($this->dashboardService->getWidget($type));
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'error' => true,
+                'message' => $e->getMessage(),
+                'code' => 'VALIDATION_ERROR',
+            ], 422);
+        }
+    }
 }

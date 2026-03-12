@@ -6,6 +6,7 @@ namespace App\Providers;
 
 use App\Contracts\CredentialDataProviderInterface;
 use App\Contracts\StudentProgressProviderInterface;
+use App\Factories\DashboardWidgetFactory;
 use App\Services\MockCredentialDataProvider;
 use App\Services\MockStudentProgressProvider;
 use Illuminate\Support\ServiceProvider;
@@ -23,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->bind(CredentialDataProviderInterface::class, MockCredentialDataProvider::class);
         $this->app->bind(StudentProgressProviderInterface::class, MockStudentProgressProvider::class);
+        $this->app->singleton(DashboardWidgetFactory::class);
     }
 
     /**
