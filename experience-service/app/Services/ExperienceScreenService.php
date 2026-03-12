@@ -50,33 +50,35 @@ class ExperienceScreenService
                 ]);
 
             if ($enrolmentResponse->successful()) {
-                $enrolments = collect($enrolmentResponse->json('data', []));
+                $students = collect($enrolmentResponse->json('data', []));
 
-                // Filter by student name when a search term is provided.
+                // Filter by student name/email when a search term is provided.
                 if ($search) {
                     $searchLower = mb_strtolower($search);
-                    $enrolments = $enrolments->filter(function (array $enrolment) use ($searchLower): bool {
-                        $studentName = mb_strtolower($enrolment['student_name'] ?? '');
-                        $studentEmail = mb_strtolower($enrolment['student_email'] ?? '');
-                        return str_contains($studentName, $searchLower)
-                            || str_contains($studentEmail, $searchLower);
+                    $students = $students->filter(function (array $student) use ($searchLower): bool {
+                        $name = mb_strtolower($student['name'] ?? '');
+                        $email = mb_strtolower($student['email'] ?? '');
+                        return str_contains($name, $searchLower)
+                            || str_contains($email, $searchLower);
                     });
                 }
 
-                $total = $enrolments->count();
-
-                // Return individual student records from the enrolments data.
-                foreach ($enrolments as $enrolment) {
-                    $data[] = [
-                        'student_id' => $enrolment['student_id'],
-                        'student_name' => $enrolment['student_name'] ?? 'Unknown',
-                        'student_email' => $enrolment['student_email'] ?? '',
-                        'cohort_id' => $enrolment['cohort_id'],
-                        'cohort_name' => $enrolment['cohort_name'] ?? '',
-                        'status' => $enrolment['status'] ?? 'enrolled',
-                        'enrolled_at' => $enrolment['enrolled_at'] ?? '',
-                    ];
+                // Flatten: one record per student-cohort assignment.
+                foreach ($students as $student) {
+                    foreach ($student['cohort_assignments'] ?? [] as $assignment) {
+                        $data[] = [
+                            'student_id' => $student['student_id'],
+                            'student_name' => $student['name'] ?? 'Unknown',
+                            'student_email' => $student['email'] ?? '',
+                            'cohort_id' => $assignment['cohort_id'],
+                            'cohort_name' => $assignment['cohort_name'] ?? '',
+                            'status' => $assignment['status'] ?? 'enrolled',
+                            'enrolled_at' => $assignment['enrolled_at'] ?? '',
+                        ];
+                    }
                 }
+
+                $total = count($data);
             }
         } catch (\Exception $e) {
             // Degraded response — return empty data on failure
@@ -113,17 +115,19 @@ class ExperienceScreenService
                 ]);
 
             if ($response->successful()) {
-                $enrolments = collect($response->json('data', []));
+                $students = collect($response->json('data', []));
 
-                // Build one CSV row per student with real enrolment data.
-                foreach ($enrolments as $enrolment) {
-                    $rows[] = [
-                        'student_name' => $enrolment['student_name'] ?? 'Unknown',
-                        'student_email' => $enrolment['student_email'] ?? '',
-                        'cohort_name' => $enrolment['cohort_name'] ?? '',
-                        'status' => $enrolment['status'] ?? 'enrolled',
-                        'enrolled_at' => $enrolment['enrolled_at'] ?? '',
-                    ];
+                // Build one CSV row per student-cohort assignment.
+                foreach ($students as $student) {
+                    foreach ($student['cohort_assignments'] ?? [] as $assignment) {
+                        $rows[] = [
+                            'student_name' => $student['name'] ?? 'Unknown',
+                            'student_email' => $student['email'] ?? '',
+                            'cohort_name' => $assignment['cohort_name'] ?? '',
+                            'status' => $assignment['status'] ?? 'enrolled',
+                            'enrolled_at' => $assignment['enrolled_at'] ?? '',
+                        ];
+                    }
                 }
             }
         } catch (\Exception $e) {
@@ -156,28 +160,29 @@ class ExperienceScreenService
                 ]);
 
             if ($enrolmentResponse->successful()) {
-                $enrolments = collect($enrolmentResponse->json('data', []));
+                $students = collect($enrolmentResponse->json('data', []));
 
-                // Return the first matching enrolment record for this student
-                // in this experience. A student may appear in multiple cohorts
-                // but we return the first match for the detail view.
-                $enrolment = $enrolments->first();
-                if ($enrolment) {
-                    return [
-                        'student_id' => $studentId,
-                        'student_name' => $enrolment['student_name'] ?? 'Unknown',
-                        'student_email' => $enrolment['student_email'] ?? '',
-                        'experience_id' => $experienceId,
-                        'cohort_id' => $enrolment['cohort_id'],
-                        'cohort_name' => $enrolment['cohort_name'] ?? '',
-                        'status' => $enrolment['status'] ?? 'enrolled',
-                        'enrolled_at' => $enrolment['enrolled_at'] ?? '',
-                        'credits' => [
-                            'earned' => 0,
-                            'total' => 0,
-                            'progress' => 0.0,
-                        ],
-                    ];
+                // Find the student and their first cohort assignment.
+                $student = $students->first();
+                if ($student) {
+                    $assignment = collect($student['cohort_assignments'] ?? [])->first();
+                    if ($assignment) {
+                        return [
+                            'student_id' => $studentId,
+                            'student_name' => $student['name'] ?? 'Unknown',
+                            'student_email' => $student['email'] ?? '',
+                            'experience_id' => $experienceId,
+                            'cohort_id' => $assignment['cohort_id'],
+                            'cohort_name' => $assignment['cohort_name'] ?? '',
+                            'status' => $assignment['status'] ?? 'enrolled',
+                            'enrolled_at' => $assignment['enrolled_at'] ?? '',
+                            'credits' => [
+                                'earned' => 0,
+                                'total' => 0,
+                                'progress' => 0.0,
+                            ],
+                        ];
+                    }
                 }
             }
         } catch (\Exception $e) {

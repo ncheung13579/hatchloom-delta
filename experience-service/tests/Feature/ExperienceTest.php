@@ -211,8 +211,8 @@ class ExperienceTest extends TestCase
         Http::fake([
             '*/api/school/enrolments*' => Http::response([
                 'data' => [
-                    ['student_id' => 10, 'student_name' => 'Alice Alpha', 'student_email' => 'alice@test.com', 'cohort_id' => 1, 'cohort_name' => 'Cohort Alpha', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01'],
-                    ['student_id' => 11, 'student_name' => 'Bob Beta', 'student_email' => 'bob@test.com', 'cohort_id' => 2, 'cohort_name' => 'Cohort Beta', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01'],
+                    ['student_id' => 10, 'name' => 'Alice Alpha', 'email' => 'alice@test.com', 'cohort_assignments' => [['cohort_id' => 1, 'cohort_name' => 'Cohort Alpha', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01']], 'assignment_status' => 'assigned'],
+                    ['student_id' => 11, 'name' => 'Bob Beta', 'email' => 'bob@test.com', 'cohort_assignments' => [['cohort_id' => 2, 'cohort_name' => 'Cohort Beta', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01']], 'assignment_status' => 'assigned'],
                 ],
             ]),
         ]);
@@ -237,7 +237,7 @@ class ExperienceTest extends TestCase
         Http::fake([
             '*/api/school/enrolments*' => Http::response([
                 'data' => [
-                    ['student_id' => 10, 'student_name' => 'Alice Alpha', 'student_email' => 'alice@test.com', 'cohort_id' => 1, 'cohort_name' => 'Cohort Alpha', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01'],
+                    ['student_id' => 10, 'name' => 'Alice Alpha', 'email' => 'alice@test.com', 'cohort_assignments' => [['cohort_id' => 1, 'cohort_name' => 'Cohort Alpha', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01']], 'assignment_status' => 'assigned'],
                 ],
             ]),
         ]);
@@ -269,7 +269,7 @@ class ExperienceTest extends TestCase
         Http::fake([
             '*/api/school/enrolments*' => Http::response([
                 'data' => [
-                    ['student_id' => 3, 'student_name' => 'Jane Doe', 'student_email' => 'jane@test.com', 'cohort_id' => 1, 'cohort_name' => 'Cohort Alpha', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01'],
+                    ['student_id' => 3, 'name' => 'Jane Doe', 'email' => 'jane@test.com', 'cohort_assignments' => [['cohort_id' => 1, 'cohort_name' => 'Cohort Alpha', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01']], 'assignment_status' => 'assigned'],
                 ],
             ]),
         ]);
