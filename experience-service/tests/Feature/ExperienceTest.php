@@ -175,7 +175,7 @@ class ExperienceTest extends TestCase
         Http::fake([
             '*/api/school/cohorts*' => Http::response([
                 'data' => [
-                    ['id' => 1, 'name' => 'Cohort A', 'status' => 'active', 'student_count' => 6, 'capacity' => 25],
+                    ['id' => 1, 'name' => 'Cohort A', 'status' => 'active', 'student_count' => 6, 'capacity' => 25, 'removed_count' => 1],
                 ],
             ]),
         ]);
@@ -209,10 +209,10 @@ class ExperienceTest extends TestCase
     public function test_can_search_students_in_experience(): void
     {
         Http::fake([
-            '*/api/school/cohorts*' => Http::response([
+            '*/api/school/enrolments*' => Http::response([
                 'data' => [
-                    ['id' => 1, 'name' => 'Cohort Alpha', 'status' => 'active', 'student_count' => 5, 'capacity' => 25],
-                    ['id' => 2, 'name' => 'Cohort Beta', 'status' => 'active', 'student_count' => 3, 'capacity' => 20],
+                    ['student_id' => 10, 'student_name' => 'Alice Alpha', 'student_email' => 'alice@test.com', 'cohort_id' => 1, 'cohort_name' => 'Cohort Alpha', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01'],
+                    ['student_id' => 11, 'student_name' => 'Bob Beta', 'student_email' => 'bob@test.com', 'cohort_id' => 2, 'cohort_name' => 'Cohort Beta', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01'],
                 ],
             ]),
         ]);
@@ -225,19 +225,19 @@ class ExperienceTest extends TestCase
             'created_by' => $this->admin->id,
         ]);
 
-        $response = $this->getJson("/api/school/experiences/{$experience->id}/students?search=Alpha", $this->authHeaders());
+        $response = $this->getJson("/api/school/experiences/{$experience->id}/students?search=Alice", $this->authHeaders());
 
         $response->assertStatus(200)
             ->assertJsonCount(1, 'data')
-            ->assertJsonFragment(['cohort_name' => 'Cohort Alpha']);
+            ->assertJsonFragment(['student_name' => 'Alice Alpha']);
     }
 
     public function test_can_export_experience_students(): void
     {
         Http::fake([
-            '*/api/school/cohorts*' => Http::response([
+            '*/api/school/enrolments*' => Http::response([
                 'data' => [
-                    ['id' => 1, 'name' => 'Cohort Alpha', 'status' => 'active', 'student_count' => 5, 'capacity' => 25, 'start_date' => '2026-03-01'],
+                    ['student_id' => 10, 'student_name' => 'Alice Alpha', 'student_email' => 'alice@test.com', 'cohort_id' => 1, 'cohort_name' => 'Cohort Alpha', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01'],
                 ],
             ]),
         ]);
@@ -258,14 +258,6 @@ class ExperienceTest extends TestCase
 
     public function test_can_get_student_detail_in_experience(): void
     {
-        Http::fake([
-            '*/api/school/cohorts*' => Http::response([
-                'data' => [
-                    ['id' => 1, 'name' => 'Cohort Alpha', 'status' => 'active', 'student_count' => 5, 'capacity' => 25],
-                ],
-            ]),
-        ]);
-
         $experience = Experience::create([
             'school_id' => $this->school->id,
             'name' => 'Business Foundations',
@@ -274,15 +266,26 @@ class ExperienceTest extends TestCase
             'created_by' => $this->admin->id,
         ]);
 
+        Http::fake([
+            '*/api/school/enrolments*' => Http::response([
+                'data' => [
+                    ['student_id' => 3, 'student_name' => 'Jane Doe', 'student_email' => 'jane@test.com', 'cohort_id' => 1, 'cohort_name' => 'Cohort Alpha', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01'],
+                ],
+            ]),
+        ]);
+
         $response = $this->getJson("/api/school/experiences/{$experience->id}/students/3", $this->authHeaders());
 
         $response->assertStatus(200)
             ->assertJsonStructure([
                 'student_id',
+                'student_name',
+                'student_email',
                 'experience_id',
                 'cohort_id',
                 'cohort_name',
                 'status',
+                'enrolled_at',
                 'credits' => ['earned', 'total', 'progress'],
             ]);
     }
@@ -577,8 +580,8 @@ class ExperienceTest extends TestCase
         Http::fake([
             '*/api/school/cohorts*' => Http::response([
                 'data' => [
-                    ['id' => 1, 'name' => 'Active Cohort', 'status' => 'active', 'student_count' => 10, 'capacity' => 20],
-                    ['id' => 2, 'name' => 'Completed Cohort', 'status' => 'completed', 'student_count' => 8, 'capacity' => 15],
+                    ['id' => 1, 'name' => 'Active Cohort', 'status' => 'active', 'student_count' => 10, 'capacity' => 20, 'removed_count' => 2],
+                    ['id' => 2, 'name' => 'Completed Cohort', 'status' => 'completed', 'student_count' => 8, 'capacity' => 15, 'removed_count' => 1],
                 ],
             ]),
         ]);
