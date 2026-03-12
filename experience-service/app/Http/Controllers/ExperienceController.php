@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Contracts\CourseDataProviderInterface;
 use App\Services\ExperienceService;
-use App\Services\MockCourseDataProvider;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -22,7 +22,7 @@ class ExperienceController extends Controller
 {
     public function __construct(
         private readonly ExperienceService $experienceService,
-        private readonly MockCourseDataProvider $courseDataProvider
+        private readonly CourseDataProviderInterface $courseDataProvider
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -32,14 +32,31 @@ class ExperienceController extends Controller
 
         $experiences = $this->experienceService->listExperiences($perPage, $search);
 
-        $data = $experiences->map(function ($experience) {
+        // Fetch all cohorts from the Enrolment Service and group by experience_id
+        // so we can attach an accurate cohort_count to each experience listing.
+        $cohortCounts = collect();
+        try {
+            $response = Http::withToken($request->bearerToken())
+                ->timeout(5)
+                ->get(config('services.enrolment.url') . '/api/school/cohorts');
+
+            if ($response->successful()) {
+                $cohortCounts = collect($response->json('data', []))
+                    ->groupBy('experience_id')
+                    ->map(fn($group) => $group->count());
+            }
+        } catch (\Exception $e) {
+            // Degraded — cohort_count will fall back to 0
+        }
+
+        $data = $experiences->map(function ($experience) use ($cohortCounts) {
             return [
                 'id' => $experience->id,
                 'name' => $experience->name,
                 'description' => $experience->description,
                 'status' => $experience->status,
                 'course_count' => $experience->courses->count(),
-                'cohort_count' => 0, // Would come from enrolment service
+                'cohort_count' => $cohortCounts->get($experience->id, 0),
                 'created_by' => $experience->creator?->name,
                 'created_at' => $experience->created_at?->toIso8601String(),
             ];

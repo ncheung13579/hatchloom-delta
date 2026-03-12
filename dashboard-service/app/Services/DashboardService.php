@@ -180,22 +180,14 @@ class DashboardService
 
         $enrolments = [];
 
-        // Try to get enrolment data from Enrolment Service
+        // Fetch enrolment data directly by student ID from the Enrolment Service
         try {
             $response = Http::withToken($token)
                 ->timeout(5)
-                ->get(config('services.enrolment.url') . '/api/school/enrolments', [
-                    'search' => $student->name,
-                ]);
+                ->get(config('services.enrolment.url') . '/api/school/enrolments/students/' . $studentId);
 
             if ($response->successful()) {
-                $data = $response->json('data', []);
-                foreach ($data as $item) {
-                    if (($item['student_id'] ?? null) == $studentId) {
-                        $enrolments = $item['cohort_assignments'] ?? [];
-                        break;
-                    }
-                }
+                $enrolments = $response->json('enrolments', []);
             }
         } catch (\Exception $e) {
             // Degraded response — no enrolment data

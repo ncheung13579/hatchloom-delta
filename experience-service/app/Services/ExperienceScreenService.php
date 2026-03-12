@@ -26,17 +26,15 @@ class ExperienceScreenService
     ) {}
 
     /**
-     * Fetch enrolled student data by querying the Enrolment Service for cohorts.
+     * Fetch individual enrolled students by querying the Enrolment Service.
      *
-     * Makes an inter-service HTTP call to the Enrolment Service's cohort
-     * endpoint, filtered by experience_id. Returns cohort-level summaries
-     * rather than individual students — a dedicated per-student endpoint
-     * is planned for D2. Degrades to empty data on network failure.
+     * Makes an inter-service HTTP call to the Enrolment Service's enrolments
+     * endpoint, filtered by experience_id. Returns per-student records with
+     * name, email, cohort name, status, and enrolment date. Degrades to
+     * empty data on network failure.
      *
-     * When a search term is provided, cohorts are filtered by name using a
-     * case-insensitive partial match. This allows the admin to quickly find
-     * a specific cohort on the Experience Screen (Screen 302) without
-     * paginating through all results.
+     * When a search term is provided, students are filtered by name using a
+     * case-insensitive partial match.
      */
     public function getEnrolledStudents(Experience $experience, ?string $search = null, int $perPage = 15): array
     {
@@ -45,37 +43,38 @@ class ExperienceScreenService
         $total = 0;
 
         try {
-            $cohortsResponse = Http::withToken($token)
+            $enrolmentResponse = Http::withToken($token)
                 ->timeout(5)
-                ->get(config('services.enrolment.url') . '/api/school/cohorts', [
+                ->get(config('services.enrolment.url') . '/api/school/enrolments', [
                     'experience_id' => $experience->id,
                 ]);
 
-            if ($cohortsResponse->successful()) {
-                $cohorts = collect($cohortsResponse->json('data', []));
+            if ($enrolmentResponse->successful()) {
+                $enrolments = collect($enrolmentResponse->json('data', []));
 
-                // Filter cohorts by name when a search term is provided.
-                // This client-side filtering is necessary because the Enrolment
-                // Service's cohort endpoint does not support a search parameter.
+                // Filter by student name when a search term is provided.
                 if ($search) {
                     $searchLower = mb_strtolower($search);
-                    $cohorts = $cohorts->filter(function (array $cohort) use ($searchLower): bool {
-                        return str_contains(mb_strtolower($cohort['cohort_name'] ?? $cohort['name'] ?? ''), $searchLower);
+                    $enrolments = $enrolments->filter(function (array $enrolment) use ($searchLower): bool {
+                        $studentName = mb_strtolower($enrolment['student_name'] ?? '');
+                        $studentEmail = mb_strtolower($enrolment['student_email'] ?? '');
+                        return str_contains($studentName, $searchLower)
+                            || str_contains($studentEmail, $searchLower);
                     });
                 }
 
-                $total = $cohorts->sum('student_count');
+                $total = $enrolments->count();
 
-                // Return cohort-level summary as individual student data isn't
-                // directly available per-experience without a dedicated endpoint.
-                // In D2, a dedicated endpoint will provide per-student records.
-                foreach ($cohorts as $cohort) {
+                // Return individual student records from the enrolments data.
+                foreach ($enrolments as $enrolment) {
                     $data[] = [
-                        'cohort_id' => $cohort['id'],
-                        'cohort_name' => $cohort['name'],
-                        'status' => $cohort['status'],
-                        'student_count' => $cohort['student_count'],
-                        'capacity' => $cohort['capacity'],
+                        'student_id' => $enrolment['student_id'],
+                        'student_name' => $enrolment['student_name'] ?? 'Unknown',
+                        'student_email' => $enrolment['student_email'] ?? '',
+                        'cohort_id' => $enrolment['cohort_id'],
+                        'cohort_name' => $enrolment['cohort_name'] ?? '',
+                        'status' => $enrolment['status'] ?? 'enrolled',
+                        'enrolled_at' => $enrolment['enrolled_at'] ?? '',
                     ];
                 }
             }
@@ -97,11 +96,10 @@ class ExperienceScreenService
     /**
      * Build a flat CSV-ready list of students enrolled in an Experience.
      *
-     * Calls the Enrolment Service's export endpoint and filters to only
-     * include rows belonging to this experience. This allows school admins
-     * to download a per-experience student roster from Screen 302 without
-     * needing to export the entire school's enrolment data and filter
-     * manually in a spreadsheet.
+     * Calls the Enrolment Service's enrolments endpoint filtered by
+     * experience_id to retrieve individual student records. Returns one
+     * row per student with their name, email, cohort name, status, and
+     * enrolment date. Degrades to an empty array on network failure.
      */
     public function exportStudentList(int $experienceId, string $token): array
     {
@@ -110,24 +108,21 @@ class ExperienceScreenService
         try {
             $response = Http::withToken($token)
                 ->timeout(5)
-                ->get(config('services.enrolment.url') . '/api/school/cohorts', [
+                ->get(config('services.enrolment.url') . '/api/school/enrolments', [
                     'experience_id' => $experienceId,
                 ]);
 
             if ($response->successful()) {
-                $cohorts = collect($response->json('data', []));
+                $enrolments = collect($response->json('data', []));
 
-                // Build flat rows from cohort-level data. Individual student
-                // names/emails are not available from the cohort endpoint, so
-                // we produce one row per cohort with aggregate counts. When D2
-                // adds a per-student endpoint, this can be enriched.
-                foreach ($cohorts as $cohort) {
+                // Build one CSV row per student with real enrolment data.
+                foreach ($enrolments as $enrolment) {
                     $rows[] = [
-                        'student_name' => $cohort['name'] . ' (cohort)',
-                        'student_email' => '',
-                        'cohort_name' => $cohort['name'],
-                        'status' => $cohort['status'],
-                        'enrolled_at' => $cohort['start_date'] ?? '',
+                        'student_name' => $enrolment['student_name'] ?? 'Unknown',
+                        'student_email' => $enrolment['student_email'] ?? '',
+                        'cohort_name' => $enrolment['cohort_name'] ?? '',
+                        'status' => $enrolment['status'] ?? 'enrolled',
+                        'enrolled_at' => $enrolment['enrolled_at'] ?? '',
                     ];
                 }
             }
@@ -141,12 +136,11 @@ class ExperienceScreenService
     /**
      * Retrieve detail for a specific student within an Experience context.
      *
-     * Fetches cohort data from the Enrolment Service for this experience
-     * and searches for the student by ID. Returns the student's enrolment
-     * status within this experience plus mock credit progress data. This
-     * powers the student drill-down view on Screen 302, letting admins
-     * inspect an individual student's standing without leaving the
-     * Experience Screen.
+     * Calls the Enrolment Service's enrolments endpoint filtered by both
+     * student_id and experience_id to perform a real lookup of the student's
+     * cohort assignment. Returns the student's enrolment status within this
+     * experience plus mock credit progress data. This powers the student
+     * drill-down view on Screen 302.
      *
      * Returns null when the student is not found in any cohort for this
      * experience, allowing the controller to return a 404 response.
@@ -154,37 +148,36 @@ class ExperienceScreenService
     public function getStudentDetail(int $experienceId, int $studentId, string $token): ?array
     {
         try {
-            $response = Http::withToken($token)
+            $enrolmentResponse = Http::withToken($token)
                 ->timeout(5)
-                ->get(config('services.enrolment.url') . '/api/school/cohorts', [
+                ->get(config('services.enrolment.url') . '/api/school/enrolments', [
+                    'student_id' => $studentId,
                     'experience_id' => $experienceId,
                 ]);
 
-            if ($response->successful()) {
-                $cohorts = collect($response->json('data', []));
+            if ($enrolmentResponse->successful()) {
+                $enrolments = collect($enrolmentResponse->json('data', []));
 
-                // Attempt to locate the student in one of the experience's cohorts.
-                // The cohort endpoint returns aggregate data, so we simulate a
-                // student lookup by matching the studentId. In D2, a dedicated
-                // per-student endpoint will replace this approximation.
-                foreach ($cohorts as $cohort) {
-                    // Check if this cohort could contain the student by using
-                    // the student count as a heuristic (student_id <= count).
-                    // This is a D1 simplification — real lookup comes in D2.
-                    if ($studentId <= ($cohort['student_count'] ?? 0)) {
-                        return [
-                            'student_id' => $studentId,
-                            'experience_id' => $experienceId,
-                            'cohort_id' => $cohort['id'],
-                            'cohort_name' => $cohort['name'],
-                            'status' => $cohort['status'],
-                            'credits' => [
-                                'earned' => 0,
-                                'total' => 0,
-                                'progress' => 0.0,
-                            ],
-                        ];
-                    }
+                // Return the first matching enrolment record for this student
+                // in this experience. A student may appear in multiple cohorts
+                // but we return the first match for the detail view.
+                $enrolment = $enrolments->first();
+                if ($enrolment) {
+                    return [
+                        'student_id' => $studentId,
+                        'student_name' => $enrolment['student_name'] ?? 'Unknown',
+                        'student_email' => $enrolment['student_email'] ?? '',
+                        'experience_id' => $experienceId,
+                        'cohort_id' => $enrolment['cohort_id'],
+                        'cohort_name' => $enrolment['cohort_name'] ?? '',
+                        'status' => $enrolment['status'] ?? 'enrolled',
+                        'enrolled_at' => $enrolment['enrolled_at'] ?? '',
+                        'credits' => [
+                            'earned' => 0,
+                            'total' => 0,
+                            'progress' => 0.0,
+                        ],
+                    ];
                 }
             }
         } catch (\Exception $e) {
@@ -245,6 +238,8 @@ class ExperienceScreenService
                 $cohorts = collect($response->json('data', []));
                 $totalStudents = $cohorts->sum('student_count');
                 $activeStudents = $cohorts->where('status', 'active')->sum('student_count');
+                // Sum removed_count across all cohorts (field provided by Enrolment Service)
+                $removedStudents = (int) $cohorts->sum('removed_count');
             }
         } catch (\Exception $e) {
             // Degraded — use zeros on failure

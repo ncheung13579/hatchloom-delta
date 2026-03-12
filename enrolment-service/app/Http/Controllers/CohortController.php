@@ -26,8 +26,9 @@ class CohortController extends Controller
     {
         $experienceId = $request->query('experience_id') ? (int) $request->query('experience_id') : null;
         $status = $request->query('status');
+        $search = $request->query('search');
 
-        $cohorts = $this->cohortService->listCohorts($experienceId, $status);
+        $cohorts = $this->cohortService->listCohorts($experienceId, $status, $search);
 
         $data = $cohorts->map(function ($cohort) {
             return [
@@ -37,6 +38,7 @@ class CohortController extends Controller
                 'status' => $cohort->status,
                 'teacher_name' => $cohort->teacher?->name,
                 'student_count' => $cohort->activeEnrolments()->count(),
+                'removed_count' => $cohort->removedCount(),
                 'capacity' => $cohort->capacity,
                 'start_date' => $cohort->start_date?->format('Y-m-d'),
                 'end_date' => $cohort->end_date?->format('Y-m-d'),
@@ -90,6 +92,7 @@ class CohortController extends Controller
             'status' => $cohort->status,
             'teacher_name' => $cohort->teacher?->name,
             'student_count' => $cohort->activeEnrolments()->count(),
+            'removed_count' => $cohort->removedCount(),
             'capacity' => $cohort->capacity,
             'start_date' => $cohort->start_date?->format('Y-m-d'),
             'end_date' => $cohort->end_date?->format('Y-m-d'),

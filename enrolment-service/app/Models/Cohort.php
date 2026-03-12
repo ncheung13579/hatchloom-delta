@@ -110,4 +110,12 @@ class Cohort extends Model
     {
         return $this->hasMany(CohortEnrolment::class)->where('status', 'enrolled');
     }
+
+    /**
+     * Count enrolments with status 'removed' for this cohort.
+     */
+    public function removedCount(): int
+    {
+        return $this->enrolments()->where('status', 'removed')->count();
+    }
 }

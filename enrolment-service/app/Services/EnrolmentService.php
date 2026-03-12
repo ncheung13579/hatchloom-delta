@@ -76,6 +76,11 @@ class EnrolmentService
             $query->whereIn('id', $studentIds);
         }
 
+        // Filter by student_id — return only the specified student.
+        if (isset($filters['student_id'])) {
+            $query->where('id', $filters['student_id']);
+        }
+
         // Grade filtering will be available when the users table includes a grade column.
         // For D1 the parameter is accepted but not applied.
 

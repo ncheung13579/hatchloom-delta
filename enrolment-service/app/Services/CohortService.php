@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Auth;
  */
 class CohortService
 {
-    public function listCohorts(?int $experienceId = null, ?string $status = null): Collection
+    public function listCohorts(?int $experienceId = null, ?string $status = null, ?string $search = null): Collection
     {
         $query = Cohort::query()->with(['experience', 'teacher']);
 
@@ -27,6 +27,10 @@ class CohortService
 
         if ($status) {
             $query->where('status', $status);
+        }
+
+        if ($search) {
+            $query->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($search) . '%']);
         }
 
         return $query->get();

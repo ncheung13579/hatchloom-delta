@@ -46,6 +46,9 @@ class EnrolmentController extends Controller
             'cohort_id' => $request->query('cohort_id') !== null
                 ? (int) $request->query('cohort_id')
                 : null,
+            'student_id' => $request->query('student_id') !== null
+                ? (int) $request->query('student_id')
+                : null,
         ], fn($value) => $value !== null);
 
         $overview = $this->enrolmentService->getEnrolmentOverview($search, $perPage, $filters);

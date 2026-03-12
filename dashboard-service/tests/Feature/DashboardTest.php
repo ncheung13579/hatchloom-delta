@@ -136,25 +136,23 @@ class DashboardTest extends TestCase
         $studentId = $this->student->id;
 
         Http::fake([
-            '*/api/school/enrolments*' => Http::response([
-                'data' => [
+            "*/api/school/enrolments/students/{$studentId}" => Http::response([
+                'student' => [
+                    'id' => $studentId,
+                    'name' => 'Student 1',
+                    'email' => 'student1@ridgewood.edu',
+                    'grade' => null,
+                ],
+                'enrolments' => [
                     [
-                        'student_id' => $studentId,
-                        'name' => 'Student 1',
-                        'email' => 'student1@ridgewood.edu',
-                        'cohort_assignments' => [
-                            [
-                                'cohort_id' => 1,
-                                'cohort_name' => 'Cohort A',
-                                'experience_name' => 'Business Foundations',
-                                'status' => 'enrolled',
-                                'enrolled_at' => '2026-01-15T00:00:00Z',
-                            ],
-                        ],
-                        'assignment_status' => 'assigned',
+                        'cohort_id' => 1,
+                        'cohort_name' => 'Cohort A',
+                        'experience_name' => 'Business Foundations',
+                        'status' => 'enrolled',
+                        'enrolled_at' => '2026-01-15T00:00:00Z',
                     ],
                 ],
-                'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 1],
+                'credentials' => [],
             ]),
         ]);
 
@@ -407,18 +405,17 @@ class DashboardTest extends TestCase
         $studentId = $this->student->id;
 
         Http::fake([
-            '*/api/school/enrolments*' => Http::response([
-                'data' => [
-                    [
-                        'student_id' => $studentId,
-                        'name' => 'Student 1',
-                        'cohort_assignments' => [
-                            ['cohort_id' => 1, 'cohort_name' => 'Cohort A', 'status' => 'enrolled'],
-                        ],
-                        'assignment_status' => 'assigned',
-                    ],
+            "*/api/school/enrolments/students/{$studentId}" => Http::response([
+                'student' => [
+                    'id' => $studentId,
+                    'name' => 'Student 1',
+                    'email' => 'student1@ridgewood.edu',
+                    'grade' => null,
                 ],
-                'meta' => ['total' => 1],
+                'enrolments' => [
+                    ['cohort_id' => 1, 'cohort_name' => 'Cohort A', 'status' => 'enrolled'],
+                ],
+                'credentials' => [],
             ]),
         ]);
 
