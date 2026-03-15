@@ -178,6 +178,7 @@ curl -H "Authorization: Bearer test-admin-token" http://localhost:8002/api/schoo
 | `APP_KEY` | (generated) | All | Laravel encryption key |
 | `APP_ENV` | local | All | Environment (local, testing, production) |
 | `APP_DEBUG` | true | All | Enable debug mode |
+| `APP_URL` | http://localhost:{port} | All | Base URL for the service |
 | `DB_CONNECTION` | pgsql | All | Database driver |
 | `DB_HOST` | postgres | All | Database host (Docker service name or IP) |
 | `DB_PORT` | 5432 | All | Database port |
@@ -188,6 +189,7 @@ curl -H "Authorization: Bearer test-admin-token" http://localhost:8002/api/schoo
 | `ENROLMENT_SERVICE_URL` | http://enrolment-service:8003 | Dashboard | URL for Enrolment Service |
 | `CACHE_STORE` | array | All | Cache driver |
 | `SESSION_DRIVER` | array | All | Session driver |
+| `QUEUE_CONNECTION` | sync | All | Queue driver (synchronous for D1) |
 
 ## CI/CD
 
