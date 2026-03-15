@@ -2,6 +2,34 @@
 
 declare(strict_types=1);
 
+/**
+ * EnrolmentService — Business logic layer for student enrolment operations.
+ *
+ * This is the most complex service in the Enrolment Service microservice. It
+ * implements Screen 303 (Enrolment) functionality:
+ *  - Paginated student overview with assignment status computation
+ *  - Enrol and remove operations with event dispatching (Observer pattern)
+ *  - School-wide statistics with automated warning generation
+ *  - Student drill-down detail with credential data (Strategy pattern)
+ *  - CSV export of all enrolment records
+ *
+ * Design patterns present:
+ *  - Repository pattern: Acts as the boundary between EnrolmentController and
+ *    the Eloquent models. Controllers validate input; this service executes logic.
+ *  - Observer pattern: enrolStudent() and removeStudent() dispatch domain events
+ *    (StudentEnrolled, StudentRemoved) that decouple the core action from its
+ *    side effects (dashboard updates, teacher notifications, credential checks).
+ *  - Strategy pattern: Depends on CredentialDataProviderInterface (constructor
+ *    injection) so the credential data source can be swapped without changing
+ *    this service. In D1, the mock returns zeroes; in production, it will query
+ *    Karl's credential engine.
+ *
+ * @see \App\Http\Controllers\EnrolmentController  The controller that uses this service
+ * @see \App\Contracts\CredentialDataProviderInterface  Strategy pattern dependency
+ * @see \App\Events\StudentEnrolled                 Event dispatched on enrolment
+ * @see \App\Events\StudentRemoved                  Event dispatched on removal
+ */
+
 namespace App\Services;
 
 use App\Contracts\CredentialDataProviderInterface;
@@ -24,11 +52,22 @@ use Illuminate\Support\Facades\Auth;
  */
 class EnrolmentService
 {
+    /**
+     * Constructor injection of the credential data provider (Strategy pattern).
+     *
+     * Laravel's container resolves this to MockCredentialDataProvider via the
+     * binding in AppServiceProvider. When Karl's credential engine is ready,
+     * only the binding needs to change — this service is unaffected.
+     */
     public function __construct(
         private readonly CredentialDataProviderInterface $credentialProvider
     ) {}
     /**
      * Build a paginated overview of all students and their cohort assignments.
+     *
+     * This is the main data source for Screen 303's student table. For each
+     * student, it computes an assignment_status that summarizes their enrolment
+     * state across all cohorts:
      *
      * Assignment status logic:
      *  - "assigned"     — student has at least one enrolment with status=enrolled in an active cohort
@@ -38,22 +77,30 @@ class EnrolmentService
      * Supports optional filters to narrow results:
      *  - experience_id: only students enrolled in cohorts of that experience
      *  - cohort_id: only students enrolled in that specific cohort
+     *  - student_id: return only the specified student
      *  - grade: no-op for D1 (the users table does not yet have a grade column)
+     *
+     * Note: The student query is scoped to school_id and role='student' to ensure
+     * tenant isolation and exclude admin/teacher users from the student list.
      */
     public function getEnrolmentOverview(?string $search = null, int $perPage = 15, array $filters = []): LengthAwarePaginator
     {
         $schoolId = Auth::user()->school_id;
 
+        // Base query: all students in the authenticated admin's school
         $query = User::where('school_id', $schoolId)
             ->where('role', 'student');
 
+        // Case-insensitive name search using LOWER() for PostgreSQL compatibility
         if ($search) {
             $searchLower = mb_strtolower($search);
             $query->whereRaw('LOWER(name) LIKE ?', ["%{$searchLower}%"]);
         }
 
         // Filter by experience_id — find students who have an enrolment in any
-        // cohort belonging to the given experience.
+        // cohort belonging to the given experience. Uses withoutGlobalScopes()
+        // on the Cohort query because we manually apply school_id filtering,
+        // and the SchoolScope would conflict with the subquery context.
         if (isset($filters['experience_id'])) {
             $cohortIds = Cohort::withoutGlobalScopes()
                 ->where('school_id', $schoolId)
@@ -67,7 +114,7 @@ class EnrolmentService
             $query->whereIn('id', $studentIds);
         }
 
-        // Filter by cohort_id — find students who have an enrolment in that cohort.
+        // Filter by cohort_id — find students who have an enrolment in that specific cohort.
         if (isset($filters['cohort_id'])) {
             $studentIds = CohortEnrolment::where('cohort_id', $filters['cohort_id'])
                 ->pluck('student_id')
@@ -86,11 +133,15 @@ class EnrolmentService
 
         $students = $query->paginate($perPage);
 
+        // Transform each User model into the enriched response format.
+        // For each student, we load their enrolments and compute the assignment status.
         $students->getCollection()->transform(function (User $student) {
+            // Load all enrolments for this student with cohort and experience data
             $enrolments = CohortEnrolment::where('student_id', $student->id)
                 ->with(['cohort.experience'])
                 ->get();
 
+            // Build the cohort assignments array for the response
             $assignments = $enrolments->map(function (CohortEnrolment $enrolment) {
                 return [
                     'cohort_id' => $enrolment->cohort_id,
@@ -101,10 +152,13 @@ class EnrolmentService
                 ];
             });
 
+            // Determine the student's overall assignment status.
+            // "assigned" requires at least one enrolled status in an active cohort.
             $hasActiveEnrolment = $enrolments->contains(function (CohortEnrolment $e) {
                 return $e->status === 'enrolled' && $e->cohort && $e->cohort->status === 'active';
             });
 
+            // "removed" means the student had enrolments but all were removed.
             $allRemoved = $enrolments->isNotEmpty() && $enrolments->every(fn($e) => $e->status === 'removed');
 
             if ($hasActiveEnrolment) {
@@ -127,6 +181,24 @@ class EnrolmentService
         return $students;
     }
 
+    /**
+     * Enrol a student into a cohort and dispatch the StudentEnrolled event.
+     *
+     * Creates the CohortEnrolment record with status='enrolled' and the current
+     * timestamp. Then dispatches the StudentEnrolled event, which triggers the
+     * Observer pattern listeners:
+     *  - UpdateDashboardCounts: logs the new active enrolment count
+     *  - NotifyTeacher: logs a notification for the cohort's teacher
+     *  - TriggerCredentialCheck: logs that credential evaluation should run
+     *
+     * Relationships are eager-loaded before dispatching the event so that
+     * listeners can access student/cohort/experience/teacher details without
+     * issuing additional database queries.
+     *
+     * @param Cohort $cohort    The cohort to enrol the student into
+     * @param int    $studentId The student's user ID
+     * @return CohortEnrolment  The newly created enrolment record
+     */
     public function enrolStudent(Cohort $cohort, int $studentId): CohortEnrolment
     {
         $enrolment = CohortEnrolment::create([
@@ -136,18 +208,35 @@ class EnrolmentService
             'enrolled_at' => now(),
         ]);
 
-        // Load relationships so listeners have access to student/cohort details
-        // without issuing additional queries.
+        // Eager-load relationships so listeners have access to student/cohort details
+        // without issuing additional queries. This is a performance optimization.
         $enrolment->load(['student', 'cohort.experience']);
         $cohort->load(['teacher', 'experience']);
 
+        // Dispatch the domain event — this triggers all registered listeners
+        // via the EventServiceProvider mappings (Observer pattern).
         StudentEnrolled::dispatch($enrolment, $cohort);
 
         return $enrolment;
     }
 
+    /**
+     * Soft-remove a student from a cohort and dispatch the StudentRemoved event.
+     *
+     * Finds the active enrolment (status='enrolled') for the given student and
+     * cohort, then calls the CohortEnrolment::remove() method which sets
+     * status='removed' and records the removed_at timestamp.
+     *
+     * Returns null if there is no active enrolment to remove (the student was
+     * never enrolled or was already removed).
+     *
+     * @param Cohort $cohort    The cohort to remove the student from
+     * @param int    $studentId The student's user ID
+     * @return CohortEnrolment|null The updated enrolment record, or null if not found
+     */
     public function removeStudent(Cohort $cohort, int $studentId): ?CohortEnrolment
     {
+        // Only look for active enrolments — already-removed enrolments are not removable again
         $enrolment = CohortEnrolment::where('cohort_id', $cohort->id)
             ->where('student_id', $studentId)
             ->where('status', 'enrolled')
@@ -157,12 +246,14 @@ class EnrolmentService
             return null;
         }
 
+        // Soft-remove: sets status='removed' and removed_at=now()
         $enrolment->remove();
 
-        // Load relationships so listeners have access to student/cohort details.
+        // Eager-load relationships for the event listeners
         $enrolment->load(['student', 'cohort.experience']);
         $cohort->load(['teacher', 'experience']);
 
+        // Dispatch the domain event with the removal timestamp
         StudentRemoved::dispatch($enrolment, $cohort, $enrolment->removed_at);
 
         return $enrolment;
@@ -171,33 +262,46 @@ class EnrolmentService
     /**
      * Calculate school-wide enrolment statistics and generate warnings.
      *
-     * Counts enrolled vs. unassigned students and checks cohort capacity.
+     * This powers the statistics panel on Screen 303. It computes five metrics:
+     *  - total_students: all students in the school
+     *  - enrolled: students with at least one active enrolment (any cohort status)
+     *  - assigned: students with at least one active enrolment in an active cohort
+     *  - not_assigned: total_students - assigned (students needing attention)
+     *  - removed: total count of removed enrolment records
+     *
      * Warning generation rules:
      *  - "unassigned_students" (severity=warning) — triggered when any students
-     *    lack an active cohort enrolment
+     *    lack an active cohort enrolment. This alerts the admin that some students
+     *    are not participating in any running cohort.
      *  - "capacity_warning" (severity=info) — triggered when an active cohort
-     *    reaches 90% or more of its defined capacity
+     *    reaches 90% or more of its defined capacity. This gives the admin
+     *    advance notice before a cohort fills up completely.
      */
     public function calculateStatistics(): array
     {
         $schoolId = Auth::user()->school_id;
 
+        // Count all students in the school (regardless of enrolment status)
         $totalStudents = User::where('school_id', $schoolId)
             ->where('role', 'student')
             ->count();
 
+        // Students with at least one enrolled status in any cohort (any cohort status)
         $enrolledStudentIds = CohortEnrolment::whereHas('cohort', function ($q) use ($schoolId) {
             $q->where('school_id', $schoolId);
         })->where('status', 'enrolled')
             ->pluck('student_id')
             ->unique();
 
+        // Students with at least one enrolled status in an ACTIVE cohort specifically
         $activeStudentIds = CohortEnrolment::whereHas('cohort', function ($q) use ($schoolId) {
             $q->where('school_id', $schoolId)->where('status', 'active');
         })->where('status', 'enrolled')
             ->pluck('student_id')
             ->unique();
 
+        // Total removed enrolment records (not unique students — one student can
+        // be removed from multiple cohorts)
         $removedCount = CohortEnrolment::whereHas('cohort', function ($q) use ($schoolId) {
             $q->where('school_id', $schoolId);
         })->where('status', 'removed')->count();
@@ -205,6 +309,7 @@ class EnrolmentService
         $assigned = $activeStudentIds->count();
         $notAssigned = $totalStudents - $assigned;
 
+        // Build warnings array — these surface actionable alerts on the admin dashboard
         $warnings = [];
         if ($notAssigned > 0) {
             $warnings[] = [
@@ -214,13 +319,17 @@ class EnrolmentService
             ];
         }
 
-        // Check capacity warnings
+        // Check capacity warnings for active cohorts.
+        // withCount() adds an active_enrolments_count attribute to each cohort
+        // via a single subquery, avoiding N+1 when checking capacity.
         $cohorts = Cohort::where('school_id', $schoolId)
             ->where('status', 'active')
             ->withCount(['activeEnrolments'])
             ->get();
 
         foreach ($cohorts as $cohort) {
+            // Only check cohorts that have a defined capacity (null = unlimited)
+            // Threshold is 90%: alert before the cohort is completely full
             if ($cohort->capacity && $cohort->active_enrolments_count >= $cohort->capacity * 0.9) {
                 $warnings[] = [
                     'type' => 'capacity_warning',
@@ -245,7 +354,12 @@ class EnrolmentService
      *
      * Returns every enrolment (including removed ones) scoped to the
      * authenticated user's school, with student and cohort details denormalized
-     * into each row for direct CSV serialization.
+     * into each row for direct CSV serialization. The denormalization means
+     * each row is self-contained — no joins needed when writing to CSV.
+     *
+     * The whereHas('cohort') clause ensures school scoping by checking the
+     * cohort's school_id, since CohortEnrolment itself does not have a
+     * school_id column.
      */
     public function exportEnrolmentList(): array
     {
@@ -276,8 +390,12 @@ class EnrolmentService
      *
      * Returns all cohort assignments with experience names so the school admin
      * can inspect a student's history without leaving Screen 303. Includes a
-     * mock credential summary that will be replaced with real data from Karl's
-     * credential engine once it is available.
+     * credential summary from the injected CredentialDataProviderInterface
+     * (Strategy pattern) — currently mock data, will be real when Karl's
+     * credential engine is integrated.
+     *
+     * Security: Verifies the student belongs to the authenticated admin's school
+     * and has role='student' before returning any data.
      *
      * @return array<string, mixed>|null Null when the student does not exist or is outside the admin's school.
      */
@@ -285,6 +403,7 @@ class EnrolmentService
     {
         $schoolId = Auth::user()->school_id;
 
+        // Verify the student exists, belongs to this school, and is actually a student
         $student = User::where('id', $studentId)
             ->where('school_id', $schoolId)
             ->where('role', 'student')
@@ -294,6 +413,7 @@ class EnrolmentService
             return null;
         }
 
+        // Load all enrolments (active and removed) with cohort and experience data
         $enrolments = CohortEnrolment::where('student_id', $student->id)
             ->with(['cohort.experience'])
             ->get();
@@ -308,6 +428,8 @@ class EnrolmentService
             ];
         });
 
+        // Fetch credential data from the injected provider (Strategy pattern).
+        // In D1 this returns { total_earned: 0, in_progress: 0, details: [] }.
         $credentials = $this->credentialProvider->getStudentCredentialSummary($studentId);
 
         return [

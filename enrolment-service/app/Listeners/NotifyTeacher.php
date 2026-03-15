@@ -2,6 +2,39 @@
 
 declare(strict_types=1);
 
+/**
+ * NotifyTeacher — Observer pattern listener for teacher notifications.
+ *
+ * This listener reacts to both StudentEnrolled and StudentRemoved events to
+ * notify the teacher assigned to the cohort about roster changes.
+ *
+ * WHY THIS LISTENER EXISTS:
+ * Teachers need to know when students join or leave their cohorts so they can
+ * adjust their teaching plans, welcome new students, or follow up on removals.
+ * By using the Observer pattern, the notification logic is decoupled from the
+ * enrolment action — EnrolmentService does not know or care that teachers are
+ * being notified.
+ *
+ * D1 BEHAVIOR (current):
+ *   Logs a structured notification message with teacher identity, student
+ *   identity, cohort details, and the action (enrolled/removed). This simulates
+ *   the real notification payload and verifies the Observer wiring.
+ *
+ * D2+ BEHAVIOR (planned):
+ *   Would dispatch a Laravel Notification (email, in-app, or push) to the
+ *   teacher user. Could also be made async via ShouldQueue to avoid blocking
+ *   the HTTP response.
+ *
+ * LISTENER METHOD NAMING:
+ * Like UpdateDashboardCounts, this uses named handler methods to handle
+ * multiple event types from a single class. The '@methodName' syntax in
+ * EventServiceProvider routes each event to the correct method.
+ *
+ * @see \App\Events\StudentEnrolled           Triggers handleStudentEnrolled()
+ * @see \App\Events\StudentRemoved            Triggers handleStudentRemoved()
+ * @see \App\Providers\EventServiceProvider   Where the listener-to-event mapping is defined
+ */
+
 namespace App\Listeners;
 
 use App\Events\StudentEnrolled;
@@ -20,6 +53,9 @@ class NotifyTeacher
 {
     /**
      * Handle the StudentEnrolled event — notify the teacher of a new student.
+     *
+     * Resolves teacher and student names with null-safe fallbacks to prevent
+     * errors if relationships are missing (e.g., cohort has no assigned teacher).
      */
     public function handleStudentEnrolled(StudentEnrolled $event): void
     {
@@ -41,6 +77,8 @@ class NotifyTeacher
 
     /**
      * Handle the StudentRemoved event — notify the teacher of a student removal.
+     *
+     * Includes the removal timestamp so the teacher knows when the removal occurred.
      */
     public function handleStudentRemoved(StudentRemoved $event): void
     {

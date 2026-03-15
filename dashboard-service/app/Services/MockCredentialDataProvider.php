@@ -1,20 +1,49 @@
 <?php
 
+/**
+ * MockCredentialDataProvider — Static sample data for credential and curriculum APIs.
+ *
+ * Design pattern: Strategy (concrete implementation)
+ *   This class is the D1 concrete Strategy for CredentialDataProviderInterface.
+ *   It returns hardcoded sample data that demonstrates the expected response
+ *   structure without requiring Karl's credential engine tables to exist.
+ *
+ * Important characteristics:
+ *   - Returns the SAME data regardless of which $studentId is passed. This is
+ *     intentional for D1 — the mock just needs to show the correct structure.
+ *   - All three credential types are represented: 'credential', 'badge', 'certificate'.
+ *   - The curriculum mapping covers all three Alberta PoS areas with realistic
+ *     requirement codes and coverage percentages.
+ *
+ * How to replace with real data (post-D1):
+ *   1. Create a new class (e.g., CredentialDataProvider) implementing
+ *      CredentialDataProviderInterface that queries the real DB tables
+ *   2. Update the binding in AppServiceProvider::register() to point to the
+ *      new class instead of this mock
+ *   3. No changes needed in DashboardService or any controller
+ *
+ * @see \App\Contracts\CredentialDataProviderInterface  The interface this implements
+ * @see \App\Providers\AppServiceProvider               Where the DI binding is configured
+ */
+
 declare(strict_types=1);
 
 namespace App\Services;
 
 use App\Contracts\CredentialDataProviderInterface;
 
-/**
- * Mock credential data for D1 testing.
- *
- * Returns static sample credentials and curriculum mappings. When Karl's
- * credential engine tables are available, replace this binding in
- * AppServiceProvider with the real implementation.
- */
 class MockCredentialDataProvider implements CredentialDataProviderInterface
 {
+    /**
+     * Return sample credentials earned by a student.
+     *
+     * In production, this would query the credentials table filtered by
+     * student_id and joined with course data. The three sample entries
+     * demonstrate the three credential types Hatchloom supports:
+     *   - 'credential' — Formal competency certification
+     *   - 'badge'      — Recognition award for participation/achievement
+     *   - 'certificate' — Course completion certificate
+     */
     public function getStudentCredentials(int $studentId): array
     {
         return [
@@ -45,6 +74,20 @@ class MockCredentialDataProvider implements CredentialDataProviderInterface
         ];
     }
 
+    /**
+     * Return sample Alberta PoS curriculum mapping for a student.
+     *
+     * The Alberta Program of Studies (PoS) defines competency requirements
+     * that Hatchloom courses can satisfy. This mapping shows which requirements
+     * a student has met through their course completions. The three areas are:
+     *
+     *   - Business Studies (8 total requirements) — business planning, marketing, etc.
+     *   - CTF Design Studies (7 total requirements) — design thinking, prototyping, etc.
+     *   - CALM (5 total requirements) — Career and Life Management: personal finance, goal setting
+     *
+     * Each 'met_by' field shows which Hatchloom course satisfied that requirement.
+     * coverage_percentage = count(requirements_met) / total_requirements.
+     */
     public function getStudentCurriculumMapping(int $studentId): array
     {
         return [
@@ -56,7 +99,7 @@ class MockCredentialDataProvider implements CredentialDataProviderInterface
                     ['code' => 'BS-3.1', 'description' => 'Understand marketing principles', 'met_by' => 'Marketing Basics'],
                 ],
                 'total_requirements' => 8,
-                'coverage_percentage' => 0.38,
+                'coverage_percentage' => 0.38, // 3 / 8 = 0.375, rounded to 0.38
             ],
             'ctf_design_studies' => [
                 'area_name' => 'CTF Design Studies',
@@ -65,7 +108,7 @@ class MockCredentialDataProvider implements CredentialDataProviderInterface
                     ['code' => 'CTF-2.1', 'description' => 'Use digital tools for prototyping', 'met_by' => 'Digital Skills'],
                 ],
                 'total_requirements' => 7,
-                'coverage_percentage' => 0.29,
+                'coverage_percentage' => 0.29, // 2 / 7 = 0.286, rounded to 0.29
             ],
             'calm' => [
                 'area_name' => 'Career and Life Management',
@@ -74,7 +117,7 @@ class MockCredentialDataProvider implements CredentialDataProviderInterface
                     ['code' => 'CALM-2.1', 'description' => 'Manage personal finances', 'met_by' => 'Financial Literacy'],
                 ],
                 'total_requirements' => 5,
-                'coverage_percentage' => 0.40,
+                'coverage_percentage' => 0.40, // 2 / 5 = 0.40
             ],
         ];
     }

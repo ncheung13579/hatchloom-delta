@@ -2,6 +2,39 @@
 
 declare(strict_types=1);
 
+/**
+ * TriggerCredentialCheck — Observer pattern listener for credential evaluation.
+ *
+ * This listener reacts ONLY to the StudentEnrolled event (not StudentRemoved).
+ * When a student is enrolled in a cohort, the credential engine should evaluate
+ * whether the student's prior credentials satisfy any prerequisites for the
+ * experience's courses.
+ *
+ * WHY ONLY ON ENROLMENT (NOT REMOVAL):
+ * Credential evaluation is forward-looking: "does this student have the
+ * prerequisites to succeed in this experience?" When a student is removed,
+ * there is nothing to evaluate — they are no longer participating.
+ *
+ * D1 BEHAVIOR (current):
+ *   Logs a structured message indicating which student, experience, and cohort
+ *   triggered the credential check. This verifies the Observer wiring.
+ *
+ * D2+ BEHAVIOR (planned):
+ *   Would make an HTTP call to Karl's credential evaluation API endpoint,
+ *   passing the student_id and experience_id. The response would indicate
+ *   whether the student meets prerequisites, and if not, could trigger a
+ *   warning in the admin dashboard.
+ *
+ * LISTENER METHOD NAMING:
+ * Unlike UpdateDashboardCounts and NotifyTeacher, this listener uses the
+ * default handle() method because it only handles one event type. In
+ * EventServiceProvider, it is registered without the '@methodName' suffix.
+ *
+ * @see \App\Events\StudentEnrolled           The only event this listens to
+ * @see \App\Providers\EventServiceProvider   Where the listener-to-event mapping is defined
+ * @see \App\Contracts\CredentialDataProviderInterface  Related: the Strategy pattern provider
+ */
+
 namespace App\Listeners;
 
 use App\Events\StudentEnrolled;
@@ -20,6 +53,9 @@ class TriggerCredentialCheck
 {
     /**
      * Handle the StudentEnrolled event — log that credential check should run.
+     *
+     * Resolves student and experience names with null-safe fallbacks, then logs
+     * a structured message with all the context Karl's API would need.
      */
     public function handle(StudentEnrolled $event): void
     {

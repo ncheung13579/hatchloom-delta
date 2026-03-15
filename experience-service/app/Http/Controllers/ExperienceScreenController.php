@@ -1,5 +1,34 @@
 <?php
 
+/**
+ * ExperienceScreenController — REST controller for Screen 302 (Experience detail screen).
+ *
+ * Architecture role:
+ *   This controller serves the sub-resource endpoints nested under a single Experience:
+ *   students, student detail, student export (CSV), contents & delivery, and statistics.
+ *   These correspond to the tabs/panels on the Experience detail screen in the frontend.
+ *
+ *   Like ExperienceController, this follows the thin-controller pattern: each method
+ *   validates the parent Experience exists, then delegates to ExperienceScreenService
+ *   for the heavy lifting (cross-service HTTP calls, data aggregation).
+ *
+ * URL structure:
+ *   All routes are nested under /api/school/experiences/{id}/:
+ *     GET  .../students          — paginated student list (from Enrolment Service)
+ *     GET  .../students/export   — CSV download of students
+ *     GET  .../students/{sid}    — single student detail drill-down
+ *     GET  .../contents          — course blocks and structure (from CourseDataProvider)
+ *     GET  .../statistics        — aggregated enrolment/completion stats
+ *
+ * Cross-service dependency:
+ *   Students and statistics data come from the Enrolment Service (port 8003).
+ *   Contents data comes from the CourseDataProviderInterface (currently mocked).
+ *   All remote calls degrade gracefully on failure.
+ *
+ * @see \App\Services\ExperienceScreenService  Data aggregation layer for Screen 302
+ * @see \App\Services\ExperienceService        Used here only for Experience lookup/validation
+ */
+
 declare(strict_types=1);
 
 namespace App\Http\Controllers;
@@ -10,22 +39,25 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-/**
- * Controller for Screen 302 (Experience detail screen) endpoints.
- *
- * Serves three sub-resources of an Experience: enrolled students,
- * contents & delivery, and statistics. Each endpoint validates the
- * Experience exists, then delegates to ExperienceScreenService for
- * data aggregation across local and remote services.
- */
 class ExperienceScreenController extends Controller
 {
+    /**
+     * @param ExperienceService       $experienceService  Used solely to look up and validate the parent Experience.
+     * @param ExperienceScreenService $screenService      Handles all data aggregation for Screen 302 sub-resources.
+     */
     public function __construct(
         private readonly ExperienceService $experienceService,
         private readonly ExperienceScreenService $screenService
     ) {}
 
-    /** List enrolled students (cohort-level summaries) for an Experience. */
+    /**
+     * GET /api/school/experiences/{id}/students — List enrolled students for an Experience.
+     *
+     * Fetches student enrolment data from the Enrolment Service, optionally filtered
+     * by a search term (name or email). Returns one record per student-cohort assignment,
+     * meaning a student enrolled in multiple cohorts of the same experience appears
+     * multiple times.
+     */
     public function students(Request $request, int $id): JsonResponse
     {
         $experience = $this->experienceService->getExperience($id);
@@ -112,7 +144,13 @@ class ExperienceScreenController extends Controller
         return response()->json($detail);
     }
 
-    /** Get course contents and block structure for an Experience. */
+    /**
+     * GET /api/school/experiences/{id}/contents — Get course contents and block structure.
+     *
+     * Returns each course in the Experience with its internal block structure (lessons,
+     * challenges). Block data comes from the CourseDataProviderInterface — currently
+     * mock data, but will be real upstream data from Team Papa's Course Service in D2.
+     */
     public function contents(int $id): JsonResponse
     {
         $experience = $this->experienceService->getExperience($id);
@@ -128,7 +166,14 @@ class ExperienceScreenController extends Controller
         return response()->json($this->screenService->getContentsAndDelivery($experience));
     }
 
-    /** Get aggregated enrolment and completion statistics for an Experience. */
+    /**
+     * GET /api/school/experiences/{id}/statistics — Aggregated enrolment/completion stats.
+     *
+     * Returns total/active/removed student counts, completion rates, and credit progress.
+     * Student counts come from the Enrolment Service; completion and credit data are
+     * stubbed with zeros in D1 because real progress tracking depends on Team Papa's
+     * Course Service integration (planned for D2).
+     */
     public function statistics(int $id): JsonResponse
     {
         $experience = $this->experienceService->getExperience($id);

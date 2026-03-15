@@ -1,5 +1,33 @@
 <?php
 
+/**
+ * EngagementChartWidget — Engagement metrics formatted for chart rendering.
+ *
+ * Design pattern: Factory Method (concrete product)
+ *   This is a concrete DashboardWidget created by DashboardWidgetFactory when
+ *   the type is 'engagement_chart'. It provides data specifically structured
+ *   for rendering engagement charts on Screen 300.
+ *
+ * Data sources:
+ *   - Local DB: Queries the users table for students in the school
+ *   - Progress provider (Strategy): Injected via context for engagement metrics
+ *
+ * Key difference from the /reporting/engagement endpoint:
+ *   The reporting endpoint (DashboardService::getEngagementRates) returns raw
+ *   engagement data. This widget adds chart-specific post-processing:
+ *   - Distribution buckets (histogram data for low/moderate/good/excellent)
+ *   - Per-student engagement_level classification
+ *   - Reformatted field names that match the frontend chart component's API
+ *
+ * No cross-service HTTP calls:
+ *   Unlike CohortSummaryWidget and StudentTableWidget, this widget does NOT
+ *   call any downstream services directly. It relies entirely on the injected
+ *   progress provider and the local users table.
+ *
+ * @see \App\Contracts\DashboardWidget          Interface this implements
+ * @see \App\Factories\DashboardWidgetFactory   Factory that instantiates this
+ */
+
 declare(strict_types=1);
 
 namespace App\Widgets;
@@ -8,15 +36,6 @@ use App\Contracts\DashboardWidget;
 use App\Contracts\StudentProgressProviderInterface;
 use App\Models\User;
 
-/**
- * Engagement chart widget for the School Admin Dashboard.
- *
- * Provides engagement metrics suitable for charting: per-student activity rates,
- * login frequency, and school-wide averages. Delegates to the injected progress
- * provider for the underlying engagement data, then adds chart-friendly summary
- * fields (distribution buckets, trend indicators) that a frontend charting
- * library can consume directly.
- */
 class EngagementChartWidget implements DashboardWidget
 {
     private int $schoolId;
@@ -30,10 +49,12 @@ class EngagementChartWidget implements DashboardWidget
 
     public function getData(): array
     {
+        // Query students from the local DB with school_id scoping
         $students = User::where('school_id', $this->schoolId)
             ->where('role', 'student')
             ->get();
 
+        // Delegate to the Strategy provider for raw engagement data
         $engagementData = $this->progressProvider->getEngagementRates($students);
         $studentEngagement = $engagementData['student_engagement'] ?? [];
         $schoolAverages = $engagementData['school_averages'] ?? [];
@@ -50,6 +71,8 @@ class EngagementChartWidget implements DashboardWidget
                 'active_student_count' => $schoolAverages['active_student_count'] ?? 0,
             ],
             'distribution' => $distribution,
+            // Reformat per-student data with chart-friendly field names and add
+            // a classified engagement_level for color-coding in the frontend
             'student_metrics' => array_map(function (array $entry): array {
                 return [
                     'student_id' => $entry['student_id'],
@@ -73,18 +96,26 @@ class EngagementChartWidget implements DashboardWidget
     /**
      * Build histogram-style distribution buckets from completion rates.
      *
-     * Buckets: 0-25% (low), 25-50% (moderate), 50-75% (good), 75-100% (excellent).
+     * Counts how many students fall into each engagement tier. The frontend
+     * can use these counts directly to render a bar chart or donut chart
+     * showing the school's engagement distribution at a glance.
+     *
+     * Buckets:
+     *   low       — 0-25% completion rate (at risk, needs intervention)
+     *   moderate  — 25-50% completion rate (below average)
+     *   good      — 50-75% completion rate (on track)
+     *   excellent — 75-100% completion rate (exceeding expectations)
      *
      * @param array<int, array<string, mixed>> $studentEngagement
-     * @return array<string, int>
+     * @return array<string, int>  Bucket name -> student count
      */
     private function buildDistribution(array $studentEngagement): array
     {
         $buckets = [
-            'low' => 0,        // 0–25%
-            'moderate' => 0,   // 25–50%
-            'good' => 0,       // 50–75%
-            'excellent' => 0,  // 75–100%
+            'low' => 0,
+            'moderate' => 0,
+            'good' => 0,
+            'excellent' => 0,
         ];
 
         foreach ($studentEngagement as $entry) {
@@ -97,7 +128,14 @@ class EngagementChartWidget implements DashboardWidget
     }
 
     /**
-     * Classify a completion rate into an engagement level.
+     * Classify a completion rate into a named engagement level.
+     *
+     * Thresholds are aligned with the distribution buckets above.
+     * The same classification is used for both the distribution histogram
+     * and the per-student engagement_level field in student_metrics.
+     *
+     * @param  float  $rate  Completion rate between 0.0 and 1.0
+     * @return string  One of: 'low', 'moderate', 'good', 'excellent'
      */
     private function classifyEngagement(float $rate): string
     {

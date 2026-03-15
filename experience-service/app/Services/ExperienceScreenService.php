@@ -1,5 +1,35 @@
 <?php
 
+/**
+ * ExperienceScreenService — Data aggregation layer for Screen 302 (Experience detail).
+ *
+ * Architecture role:
+ *   This service is the backend for Screen 302's three tabs:
+ *     1. Students tab: getEnrolledStudents(), exportStudentList(), getStudentDetail()
+ *     2. Contents tab: getContentsAndDelivery()
+ *     3. Statistics tab: getExperienceStatistics()
+ *
+ *   It is an "aggregation service" — it does not own any data itself. Instead, it
+ *   combines data from two sources:
+ *     - Enrolment Service (port 8003): cohorts, enrolments, student counts (via HTTP)
+ *     - CourseDataProviderInterface: course names, block structures (via Strategy pattern)
+ *
+ * Cross-service HTTP calls:
+ *   This service makes the most inter-service calls in the Experience Service codebase.
+ *   Every method that calls the Enrolment Service follows the same pattern:
+ *     1. Forward the user's bearer token (so the Enrolment Service can authenticate)
+ *     2. Set a 5-second timeout (prevent hanging if the Enrolment Service is slow)
+ *     3. Wrap in try/catch and return empty/zero data on failure (graceful degradation)
+ *
+ *   Enrolment Service endpoints used:
+ *     - GET /api/school/enrolments?experience_id={id}          -> student list
+ *     - GET /api/school/enrolments?student_id={id}&experience_id={id} -> student detail
+ *     - GET /api/school/cohorts?experience_id={id}             -> statistics
+ *
+ * @see \App\Http\Controllers\ExperienceScreenController  The controller that calls this service
+ * @see \App\Contracts\CourseDataProviderInterface          Strategy interface for course data
+ */
+
 declare(strict_types=1);
 
 namespace App\Services;
@@ -9,16 +39,6 @@ use App\Models\Experience;
 use App\Models\ExperienceCourse;
 use Illuminate\Support\Facades\Http;
 
-/**
- * Service layer for Screen 302 (Experience Screen) data aggregation.
- *
- * This service assembles the three data panels shown on the Experience
- * detail screen: enrolled students, contents & delivery, and statistics.
- * It combines local Experience data with remote data fetched from the
- * Enrolment Service (cohort/student counts) and course data from the
- * CourseDataProviderInterface (course blocks). All remote calls degrade
- * gracefully, returning empty/zero data on failure.
- */
 class ExperienceScreenService
 {
     public function __construct(
@@ -63,7 +83,9 @@ class ExperienceScreenService
                     });
                 }
 
-                // Flatten: one record per student-cohort assignment.
+                // Flatten the nested structure into one record per student-cohort assignment.
+                // A student enrolled in 2 cohorts of the same experience produces 2 rows.
+                // This matches how the UI renders the student list table.
                 foreach ($students as $student) {
                     foreach ($student['cohort_assignments'] ?? [] as $assignment) {
                         $data[] = [
@@ -167,6 +189,9 @@ class ExperienceScreenService
                 if ($student) {
                     $assignment = collect($student['cohort_assignments'] ?? [])->first();
                     if ($assignment) {
+                        // Credit data is stubbed with zeros for D1. Real credit/progress
+                        // tracking requires integration with Team Papa's Course Service
+                        // and Karl's credential engine, both planned for D2.
                         return [
                             'student_id' => $studentId,
                             'student_name' => $student['name'] ?? 'Unknown',
@@ -177,9 +202,9 @@ class ExperienceScreenService
                             'status' => $assignment['status'] ?? 'enrolled',
                             'enrolled_at' => $assignment['enrolled_at'] ?? '',
                             'credits' => [
-                                'earned' => 0,
-                                'total' => 0,
-                                'progress' => 0.0,
+                                'earned' => 0,     // D1 stub — will come from credential engine
+                                'total' => 0,      // D1 stub — will come from course catalogue
+                                'progress' => 0.0, // D1 stub — earned/total ratio
                             ],
                         ];
                     }
@@ -250,6 +275,8 @@ class ExperienceScreenService
             // Degraded — use zeros on failure
         }
 
+        // Completion rate is a rough proxy in D1: active students / total students.
+        // In D2, this will be replaced by actual course-completion tracking from Team Papa.
         $completionRate = $totalStudents > 0 ? round($activeStudents / $totalStudents, 2) : 0.0;
 
         return [
@@ -260,13 +287,13 @@ class ExperienceScreenService
                 'removed' => $removedStudents,
             ],
             'completion' => [
-                'completed' => 0,
+                'completed' => 0,           // D1 stub — needs Course Service progress data
                 'in_progress' => $activeStudents,
-                'not_started' => 0,
+                'not_started' => 0,         // D1 stub — needs Course Service progress data
                 'completion_rate' => $completionRate,
             ],
             'credit_progress' => [
-                'average' => 0.0,
+                'average' => 0.0,           // D1 stub — needs credential engine integration
                 'students_with_credits' => 0,
             ],
         ];

@@ -1,5 +1,34 @@
 <?php
 
+/**
+ * AuditLogMiddleware — Structured audit trail for mutating API requests.
+ *
+ * Architecture role:
+ *   Implements the Decorator pattern (SDD Section 6.6) by wrapping the normal
+ *   request-response pipeline with audit logging. This middleware does NOT alter
+ *   the request or response — it only observes and records.
+ *
+ * Request lifecycle position:
+ *   HTTP Request -> MockAuthMiddleware -> AuditLogMiddleware -> Controller -> Response
+ *                                                                              |
+ *                                                        (log entry written here, after response)
+ *
+ *   The audit entry is recorded AFTER the response is generated (post-middleware).
+ *   This is intentional: we need the HTTP status code, which is only known after
+ *   the controller has executed. The call to $next($request) runs the entire
+ *   downstream pipeline first, then we log on the way back out.
+ *
+ * What gets logged:
+ *   Only mutating methods (POST, PUT, PATCH, DELETE). Read-only methods (GET, HEAD,
+ *   OPTIONS) are skipped to avoid flooding the log with high-frequency read traffic.
+ *
+ * Security:
+ *   Request body fields like 'password', 'token', 'secret' are redacted before
+ *   logging to prevent credential leakage in log files or log aggregation services.
+ *
+ * @see \App\Http\Middleware\MockAuthMiddleware  Must run before this so user_id is available
+ */
+
 declare(strict_types=1);
 
 namespace App\Http\Middleware;
@@ -9,17 +38,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
-/**
- * Audit trail middleware (Decorator pattern — SDD Section 6.6).
- *
- * Decorates all POST, PUT, PATCH, and DELETE requests with structured audit
- * logging. The log entry is written AFTER the response is generated so we can
- * capture the HTTP status code. GET/HEAD/OPTIONS requests are passed through
- * without logging.
- *
- * Sensitive fields (passwords, tokens, secrets) are redacted from the recorded
- * request body to prevent credential leakage in log files.
- */
 class AuditLogMiddleware
 {
     /**
@@ -43,10 +61,20 @@ class AuditLogMiddleware
      */
     private const AUDITABLE_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
+    /**
+     * Run the request through the pipeline, then log if it was a mutating method.
+     *
+     * Note: $next($request) is called FIRST — this means the entire controller
+     * pipeline executes before we reach the logging code. This is a "post-middleware"
+     * pattern, as opposed to MockAuthMiddleware which is a "pre-middleware" (it runs
+     * logic before calling $next).
+     */
     public function handle(Request $request, Closure $next): Response
     {
+        // Let the request proceed through the rest of the pipeline (controller, etc.)
         $response = $next($request);
 
+        // Only log mutating operations — reads are too frequent to audit at this level.
         if (in_array($request->method(), self::AUDITABLE_METHODS, true)) {
             $this->recordAuditEntry($request, $response);
         }

@@ -1,5 +1,33 @@
 <?php
 
+/**
+ * AppServiceProvider — Dependency injection bindings for the Dashboard Service.
+ *
+ * This is the central configuration point for the Dashboard Service's dependency
+ * injection (DI) container. It wires together the Strategy pattern interfaces
+ * with their concrete implementations and registers factory singletons.
+ *
+ * Why this file matters:
+ *   When transitioning from D1 (mock data) to D2 (real integrations), this is
+ *   the ONLY file that needs to change to swap implementations. All service and
+ *   controller code depends on interfaces, not concrete classes, so swapping
+ *   a mock for a real implementation is a one-line change here.
+ *
+ * Current bindings (D1 — mock data):
+ *   CredentialDataProviderInterface  -> MockCredentialDataProvider
+ *   StudentProgressProviderInterface -> MockStudentProgressProvider
+ *   DashboardWidgetFactory           -> singleton (stateless, reusable)
+ *
+ * Future bindings (D2 — real integrations):
+ *   CredentialDataProviderInterface  -> CredentialDataProvider (queries Karl's tables)
+ *   StudentProgressProviderInterface -> StudentProgressProvider (queries Course Service + activity logs)
+ *   DashboardWidgetFactory           -> singleton (no change needed)
+ *
+ * @see \App\Contracts\CredentialDataProviderInterface   Strategy interface for credentials
+ * @see \App\Contracts\StudentProgressProviderInterface  Strategy interface for progress metrics
+ * @see \App\Factories\DashboardWidgetFactory            Factory for widget instantiation
+ */
+
 declare(strict_types=1);
 
 namespace App\Providers;
@@ -14,21 +42,38 @@ use Illuminate\Support\ServiceProvider;
 class AppServiceProvider extends ServiceProvider
 {
     /**
-     * Register any application services.
+     * Register application services in the DI container.
      *
-     * Binds provider interfaces to their mock implementations for D1.
-     * When real upstream services are available, swap the mock classes
-     * here — no other code changes needed.
+     * The bind() calls register interface-to-implementation mappings. When any
+     * class (e.g., DashboardService) type-hints one of these interfaces in its
+     * constructor, Laravel automatically resolves it to the bound implementation.
+     *
+     * bind() vs singleton():
+     *   - bind(): Creates a NEW instance each time the interface is resolved.
+     *     Used for providers because they may hold request-specific state in the future.
+     *   - singleton(): Creates ONE instance and reuses it for all resolutions.
+     *     Used for DashboardWidgetFactory because it's stateless (just a type map).
      */
     public function register(): void
     {
+        // Strategy binding: credential data (mock for D1)
+        // Swap to real implementation when Karl's credential engine is ready
         $this->app->bind(CredentialDataProviderInterface::class, MockCredentialDataProvider::class);
+
+        // Strategy binding: student progress metrics (mock for D1)
+        // Swap to real implementation when Team Papa's Course Service is integrated
         $this->app->bind(StudentProgressProviderInterface::class, MockStudentProgressProvider::class);
+
+        // Widget factory: singleton because it's stateless — the WIDGET_MAP constant
+        // never changes, so there's no reason to create multiple instances
         $this->app->singleton(DashboardWidgetFactory::class);
     }
 
     /**
      * Bootstrap any application services.
+     *
+     * Currently empty. This is where you'd register event listeners, observers,
+     * global scopes, or other boot-time configuration for D2.
      */
     public function boot(): void
     {
