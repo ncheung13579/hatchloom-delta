@@ -28,8 +28,20 @@ Thumbs.db
 # Composer downloaded during Docker builds
 **/composer.phar
 
+# Frontend scaffolding (not used — API-only services)
+**/vite.config.js
+**/package.json
+**/resources/css/
+**/resources/js/
+**/resources/views/welcome.blade.php
+**/public/favicon.ico
+**/public/robots.txt
+
 # Docker
 **/docker-compose.override.yml
+
+# Duplicate scripts (canonical versions live in hatchloom-delta root)
+run-integration.sh
 
 # Project spec / working files (not for submission)
 CLAUDE.md
