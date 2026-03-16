@@ -80,23 +80,25 @@ Route::prefix('school')->group(function () {
         // Cohort CRUD — uses apiResource which registers GET index, GET show,
         // POST store, PUT/PATCH update. DELETE (destroy) is excluded because
         // cohorts are never deleted — they are completed instead.
-        Route::apiResource('cohorts', CohortController::class)->except(['destroy']);
+        Route::apiResource('cohorts', CohortController::class)
+            ->except(['destroy'])
+            ->where(['cohort' => '[0-9]+']);
 
         // State transition endpoints — PATCH is used (not PUT) because these
         // are partial updates that change only the status field.
-        Route::patch('cohorts/{id}/activate', [CohortController::class, 'activate']);
-        Route::patch('cohorts/{id}/complete', [CohortController::class, 'complete']);
+        Route::patch('cohorts/{id}/activate', [CohortController::class, 'activate'])->where('id', '[0-9]+');
+        Route::patch('cohorts/{id}/complete', [CohortController::class, 'complete'])->where('id', '[0-9]+');
 
         // Enrolment operations — nested under cohorts because enrolments belong
         // to a specific cohort.
-        Route::post('cohorts/{cohortId}/enrolments', [EnrolmentController::class, 'enrol']);
-        Route::delete('cohorts/{cohortId}/enrolments/{studentId}', [EnrolmentController::class, 'remove']);
+        Route::post('cohorts/{cohortId}/enrolments', [EnrolmentController::class, 'enrol'])->where('cohortId', '[0-9]+');
+        Route::delete('cohorts/{cohortId}/enrolments/{studentId}', [EnrolmentController::class, 'remove'])->where(['cohortId' => '[0-9]+', 'studentId' => '[0-9]+']);
 
         // Enrolment overview and analysis — top-level endpoints (not nested under
         // a specific cohort) because they provide school-wide views.
         Route::get('enrolments', [EnrolmentController::class, 'index']);
         Route::get('enrolments/statistics', [EnrolmentController::class, 'statistics']);
-        Route::get('enrolments/students/{studentId}', [EnrolmentController::class, 'studentDetail']);
+        Route::get('enrolments/students/{studentId}', [EnrolmentController::class, 'studentDetail'])->where('studentId', '[0-9]+');
         Route::get('enrolments/export', [EnrolmentController::class, 'export']);
     });
 });

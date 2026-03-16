@@ -154,5 +154,15 @@ class DatabaseSeeder extends Seeder
             ]);
         }
         // Students 9-10 (user_ids 12-13) are not assigned
+
+        // Reset PostgreSQL sequences so the next INSERT uses the correct ID.
+        // Without this, the first create after seeding fails with a duplicate
+        // key violation because the sequence is still at 1 while rows with
+        // explicit IDs already exist.
+        DB::statement("SELECT setval('schools_id_seq', (SELECT COALESCE(MAX(id), 0) FROM schools))");
+        DB::statement("SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 0) FROM users))");
+        DB::statement("SELECT setval('experiences_id_seq', (SELECT COALESCE(MAX(id), 0) FROM experiences))");
+        DB::statement("SELECT setval('cohorts_id_seq', (SELECT COALESCE(MAX(id), 0) FROM cohorts))");
+        DB::statement("SELECT setval('cohort_enrolments_id_seq', (SELECT COALESCE(MAX(id), 0) FROM cohort_enrolments))");
     }
 }

@@ -55,16 +55,17 @@ Route::prefix('school')->group(function () {
         // --- Screen 302 sub-resource routes ---
         // These MUST be registered before apiResource to prevent the {id} wildcard
         // from swallowing path segments like "students" or "contents" as an experience ID.
-        Route::get('experiences/{id}/students/export', [ExperienceScreenController::class, 'exportStudents']);
-        Route::get('experiences/{id}/students/{studentId}', [ExperienceScreenController::class, 'studentDetail']);
-        Route::get('experiences/{id}/students', [ExperienceScreenController::class, 'students']);
-        Route::get('experiences/{id}/contents', [ExperienceScreenController::class, 'contents']);
-        Route::get('experiences/{id}/statistics', [ExperienceScreenController::class, 'statistics']);
+        Route::get('experiences/{id}/students/export', [ExperienceScreenController::class, 'exportStudents'])->where('id', '[0-9]+');
+        Route::get('experiences/{id}/students/{studentId}', [ExperienceScreenController::class, 'studentDetail'])->where(['id' => '[0-9]+', 'studentId' => '[0-9]+']);
+        Route::get('experiences/{id}/students', [ExperienceScreenController::class, 'students'])->where('id', '[0-9]+');
+        Route::get('experiences/{id}/contents', [ExperienceScreenController::class, 'contents'])->where('id', '[0-9]+');
+        Route::get('experiences/{id}/statistics', [ExperienceScreenController::class, 'statistics'])->where('id', '[0-9]+');
 
         // --- Screen 301 CRUD routes ---
         // apiResource() generates: index, store, show, update, destroy
         // It does NOT generate create or edit (those are form-display routes for Blade,
         // which we don't use in an API-only service).
-        Route::apiResource('experiences', ExperienceController::class);
+        Route::apiResource('experiences', ExperienceController::class)
+            ->where(['experience' => '[0-9]+']);
     });
 });

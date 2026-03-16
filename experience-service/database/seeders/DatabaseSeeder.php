@@ -103,5 +103,14 @@ class DatabaseSeeder extends Seeder
             ['id' => 4, 'experience_id' => 2, 'course_id' => 4, 'sequence' => 1],
             ['id' => 5, 'experience_id' => 2, 'course_id' => 5, 'sequence' => 2],
         ]);
+
+        // Reset PostgreSQL sequences so the next INSERT uses the correct ID.
+        // Without this, the first create after seeding fails with a duplicate
+        // key violation because the sequence is still at 1 while rows with
+        // explicit IDs already exist.
+        DB::statement("SELECT setval('schools_id_seq', (SELECT COALESCE(MAX(id), 0) FROM schools))");
+        DB::statement("SELECT setval('users_id_seq', (SELECT COALESCE(MAX(id), 0) FROM users))");
+        DB::statement("SELECT setval('experiences_id_seq', (SELECT COALESCE(MAX(id), 0) FROM experiences))");
+        DB::statement("SELECT setval('experience_courses_id_seq', (SELECT COALESCE(MAX(id), 0) FROM experience_courses))");
     }
 }
