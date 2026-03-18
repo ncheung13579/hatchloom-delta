@@ -36,31 +36,36 @@ class EnrolmentTest extends TestCase
         ]);
 
         $this->admin = User::create([
-            'id' => 1,
             'name' => 'Admin User',
             'email' => 'admin@ridgewood.edu',
             'password' => bcrypt('password'),
             'role' => 'school_admin',
             'school_id' => $this->school->id,
-        ]);
+        ]); // auto-increment ID 1 → matches TOKEN_MAP 'test-admin-token'
 
         User::create([
-            'id' => 2,
             'name' => 'Ms. Smith',
             'email' => 'teacher1@ridgewood.edu',
             'password' => bcrypt('password'),
             'role' => 'school_teacher',
             'school_id' => $this->school->id,
-        ]);
+        ]); // auto-increment ID 2 → matches TOKEN_MAP 'test-teacher-token'
+
+        User::create([
+            'name' => 'Filler User',
+            'email' => 'filler@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'school_teacher',
+            'school_id' => $this->school->id,
+        ]); // auto-increment ID 3 → filler so student gets ID 4
 
         $this->student = User::create([
-            'id' => 4,
             'name' => 'Student 1',
             'email' => 'student1@ridgewood.edu',
             'password' => bcrypt('password'),
             'role' => 'student',
             'school_id' => $this->school->id,
-        ]);
+        ]); // auto-increment ID 4 → matches TOKEN_MAP 'test-student-token'
 
         $this->experience = Experience::create([
             'school_id' => $this->school->id,
@@ -699,6 +704,123 @@ class EnrolmentTest extends TestCase
         // Verify at least one data row exists
         $this->assertGreaterThanOrEqual(2, count($lines));
     }
+
+    // ── Authentication & Authorization ──────────────────────
+
+    public function test_unauthenticated_request_returns_401(): void
+    {
+        $response = $this->getJson('/api/school/enrolments');
+
+        $response->assertStatus(401)
+            ->assertJsonFragment([
+                'error' => true,
+                'code' => 'UNAUTHENTICATED',
+            ]);
+    }
+
+    public function test_invalid_token_returns_401(): void
+    {
+        $response = $this->getJson('/api/school/enrolments', [
+            'Authorization' => 'Bearer completely-invalid-token',
+        ]);
+
+        $response->assertStatus(401)
+            ->assertJsonFragment([
+                'error' => true,
+                'code' => 'UNAUTHENTICATED',
+            ]);
+    }
+
+    public function test_student_role_returns_403(): void
+    {
+        $response = $this->getJson('/api/school/enrolments', [
+            'Authorization' => 'Bearer test-student-token',
+        ]);
+
+        $response->assertStatus(403)
+            ->assertJsonFragment([
+                'error' => true,
+                'code' => 'FORBIDDEN',
+            ]);
+    }
+
+    // ── CSV Export Content Validation ─────────────────────
+
+    public function test_csv_export_data_rows_match_enrolment(): void
+    {
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        $response = $this->get('/api/school/enrolments/export', $this->authHeaders());
+
+        $response->assertStatus(200);
+        $content = $response->streamedContent();
+        $lines = explode("\n", trim($content));
+
+        // Verify data row contains the enrolled student's info
+        $this->assertGreaterThanOrEqual(2, count($lines));
+        $dataRow = str_getcsv($lines[1]);
+        $headers = str_getcsv($lines[0]);
+        $row = array_combine($headers, $dataRow);
+
+        $this->assertEquals('Student 1', $row['student_name']);
+        $this->assertEquals('student1@ridgewood.edu', $row['student_email']);
+        $this->assertEquals('Cohort A', $row['cohort_name']);
+        $this->assertEquals('Business Foundations', $row['experience_name']);
+        $this->assertEquals('enrolled', $row['status']);
+        $this->assertNotEmpty($row['enrolled_at']);
+    }
+
+    public function test_csv_export_includes_removed_students(): void
+    {
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'removed',
+            'enrolled_at' => now(),
+            'removed_at' => now(),
+        ]);
+
+        $response = $this->get('/api/school/enrolments/export', $this->authHeaders());
+
+        $response->assertStatus(200);
+        $content = $response->streamedContent();
+        $lines = explode("\n", trim($content));
+        $headers = str_getcsv($lines[0]);
+        $dataRow = str_getcsv($lines[1]);
+        $row = array_combine($headers, $dataRow);
+
+        $this->assertEquals('removed', $row['status']);
+        $this->assertNotEmpty($row['removed_at']);
+    }
+
+    // ── Concurrency Safety ────────────────────────────────
+
+    public function test_database_unique_constraint_prevents_concurrent_duplicate(): void
+    {
+        // First enrolment succeeds
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        // Simulate a race condition: second insert at the DB level should throw
+        $this->expectException(\Illuminate\Database\QueryException::class);
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+    }
+
+    // ── Assignment status ─────────────────────────────────
 
     public function test_enrolment_overview_shows_correct_assignment_status(): void
     {

@@ -215,4 +215,27 @@ class Cohort extends Model
     {
         return $this->enrolments()->where('status', 'removed')->count();
     }
+
+    /**
+     * Transform the cohort into a flat array for list/show API responses.
+     *
+     * Moved here from CohortController to fix Feature Envy — the controller
+     * was accessing 8+ properties and relationships of the Cohort model.
+     * The model itself knows best how to represent its own data.
+     */
+    public function toApiArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'experience_id' => $this->experience_id,
+            'status' => $this->status,
+            'teacher_name' => $this->teacher?->name,
+            'student_count' => $this->activeEnrolments()->count(),
+            'removed_count' => $this->removedCount(),
+            'capacity' => $this->capacity,
+            'start_date' => $this->start_date?->format('Y-m-d'),
+            'end_date' => $this->end_date?->format('Y-m-d'),
+        ];
+    }
 }

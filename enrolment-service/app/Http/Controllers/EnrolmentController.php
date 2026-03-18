@@ -125,82 +125,20 @@ class EnrolmentController extends Controller
      */
     public function enrol(Request $request, int $cohortId): JsonResponse
     {
-        // Step 1: Find the cohort (SchoolScope auto-filters by authenticated school)
         $cohort = Cohort::find($cohortId);
-
         if (!$cohort) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Cohort not found',
-                'code' => 'NOT_FOUND',
-            ], 404);
+            return $this->errorResponse('Cohort not found', 'NOT_FOUND', 404);
         }
 
-        $validated = $request->validate([
-            'student_id' => 'required|integer',
-        ]);
-
+        $validated = $request->validate(['student_id' => 'required|integer']);
         $studentId = $validated['student_id'];
 
-        // Step 2: Verify student belongs to same school — this is a hard security
-        // requirement. We explicitly check school_id and role='student' to prevent
-        // enrolling teachers/admins or students from other schools.
-        $student = User::where('id', $studentId)
-            ->where('school_id', Auth::user()->school_id)
-            ->where('role', 'student')
-            ->first();
-
-        if (!$student) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Student not found or not in your school',
-                'code' => 'VALIDATION_ERROR',
-            ], 422);
+        // Run the 5-step validation chain; returns a JsonResponse on failure or null on success
+        $validationError = $this->validateEnrolment($cohort, $studentId);
+        if ($validationError) {
+            return $validationError;
         }
 
-        // Step 3: Only active cohorts accept enrolments. This enforces the State
-        // pattern business rule — not_started cohorts are still being set up, and
-        // completed cohorts are frozen for reporting.
-        if ($cohort->status !== 'active') {
-            return response()->json([
-                'error' => true,
-                'message' => 'Cohort is not active',
-                'code' => 'VALIDATION_ERROR',
-            ], 422);
-        }
-
-        // Step 4: Capacity check. Capacity is optional (null = unlimited), but
-        // when set, we enforce it strictly by counting only active enrolments
-        // (removed students do not count toward the cap).
-        if ($cohort->capacity) {
-            $currentCount = $cohort->activeEnrolments()->count();
-            if ($currentCount >= $cohort->capacity) {
-                return response()->json([
-                    'error' => true,
-                    'message' => 'Cohort is at full capacity',
-                    'code' => 'VALIDATION_ERROR',
-                ], 422);
-            }
-        }
-
-        // Step 5: Duplicate check includes removed enrolments. This is a deliberate
-        // design decision — once a student is removed from a cohort, they cannot be
-        // re-enrolled in the same cohort. This preserves the audit trail and prevents
-        // gaming of the system.
-        $existing = CohortEnrolment::where('cohort_id', $cohort->id)
-            ->where('student_id', $studentId)
-            ->first();
-
-        if ($existing) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Student is already enrolled in this cohort',
-                'code' => 'DUPLICATE_ENROLMENT',
-            ], 422);
-        }
-
-        // All guards passed — delegate to EnrolmentService which creates the record
-        // and dispatches the StudentEnrolled event.
         $enrolment = $this->enrolmentService->enrolStudent($cohort, $studentId);
 
         return response()->json([
@@ -210,6 +148,57 @@ class EnrolmentController extends Controller
             'status' => $enrolment->status,
             'enrolled_at' => $enrolment->enrolled_at?->toIso8601String(),
         ], 201);
+    }
+
+    /**
+     * Validate all preconditions for enrolling a student into a cohort.
+     *
+     * Returns a JsonResponse describing the validation failure, or null if all checks pass.
+     * Extracted from enrol() to reduce method length and isolate validation logic.
+     */
+    private function validateEnrolment(Cohort $cohort, int $studentId): ?JsonResponse
+    {
+        // Verify student belongs to the same school and is a student
+        $student = User::where('id', $studentId)
+            ->where('school_id', Auth::user()->school_id)
+            ->where('role', 'student')
+            ->first();
+
+        if (!$student) {
+            return $this->errorResponse('Student not found or not in your school', 'VALIDATION_ERROR', 422);
+        }
+
+        if ($cohort->status !== 'active') {
+            return $this->errorResponse('Cohort is not active', 'VALIDATION_ERROR', 422);
+        }
+
+        if ($cohort->capacity && $cohort->activeEnrolments()->count() >= $cohort->capacity) {
+            return $this->errorResponse('Cohort is at full capacity', 'VALIDATION_ERROR', 422);
+        }
+
+        $existing = CohortEnrolment::where('cohort_id', $cohort->id)
+            ->where('student_id', $studentId)
+            ->first();
+
+        if ($existing) {
+            return $this->errorResponse('Student is already enrolled in this cohort', 'DUPLICATE_ENROLMENT', 422);
+        }
+
+        return null;
+    }
+
+    /**
+     * Build a standardized error response.
+     *
+     * Eliminates duplicated error response construction across controller methods.
+     */
+    private function errorResponse(string $message, string $code, int $status): JsonResponse
+    {
+        return response()->json([
+            'error' => true,
+            'message' => $message,
+            'code' => $code,
+        ], $status);
     }
 
     /**
@@ -227,23 +216,13 @@ class EnrolmentController extends Controller
         $cohort = Cohort::find($cohortId);
 
         if (!$cohort) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Cohort not found',
-                'code' => 'NOT_FOUND',
-            ], 404);
+            return $this->errorResponse('Cohort not found', 'NOT_FOUND', 404);
         }
 
-        // EnrolmentService handles finding the active enrolment and marking it removed.
-        // Returns null if there is no active enrolment for this student in this cohort.
         $enrolment = $this->enrolmentService->removeStudent($cohort, $studentId);
 
         if (!$enrolment) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Enrolment not found',
-                'code' => 'NOT_FOUND',
-            ], 404);
+            return $this->errorResponse('Enrolment not found', 'NOT_FOUND', 404);
         }
 
         return response()->json(['message' => 'Student removed from cohort']);
@@ -277,11 +256,7 @@ class EnrolmentController extends Controller
         $detail = $this->enrolmentService->getStudentDetail($studentId);
 
         if ($detail === null) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Student not found',
-                'code' => 'NOT_FOUND',
-            ], 404);
+            return $this->errorResponse('Student not found', 'NOT_FOUND', 404);
         }
 
         return response()->json($detail);

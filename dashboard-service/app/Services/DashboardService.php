@@ -82,103 +82,28 @@ class DashboardService
     {
         $user = Auth::user();
         $school = $user->school;
-        // Forward the caller's token to downstream services so they can
-        // authenticate the request and enforce school-scoped data access
         $token = request()->bearerToken();
 
         $warnings = [];
-        $experienceData = null;
-        $enrolmentStats = null;
 
-        // --- HTTP Call #1: Experience Service (port 8002) ---
-        // Fetches the list of experiences belonging to this school.
-        // Expected response: { "data": [ { "id": 1, "title": "...", "status": "active", ... }, ... ] }
-        // On failure: experienceData stays null, a warning is added, and experience-dependent
-        // fields in the response will show zero/empty values.
-        try {
-            $experienceResponse = Http::withToken($token)
-                ->timeout(5)
-                ->get(config('services.experience.url') . '/api/school/experiences');
+        // Fetch data from downstream services with graceful degradation
+        $experienceData = $this->fetchServiceData(
+            config('services.experience.url') . '/api/school/experiences',
+            $token, 'Experience service is unavailable', $warnings
+        );
 
-            if ($experienceResponse->successful()) {
-                $experienceData = $experienceResponse->json();
-            } else {
-                $warnings[] = [
-                    'type' => 'service_degraded',
-                    'message' => 'Experience service is unavailable',
-                    'severity' => 'warning',
-                ];
-            }
-        } catch (\Exception $e) {
-            $warnings[] = [
-                'type' => 'service_degraded',
-                'message' => 'Experience service is unavailable',
-                'severity' => 'warning',
-            ];
-        }
+        $enrolmentStats = $this->fetchServiceData(
+            config('services.enrolment.url') . '/api/school/enrolments/statistics',
+            $token, 'Enrolment service is unavailable', $warnings
+        );
 
-        // --- HTTP Call #2: Enrolment Service (port 8003) — statistics endpoint ---
-        // Fetches aggregate enrolment statistics for this school.
-        // Expected response: { "enrolled": 25, "assigned": 20, "not_assigned": 5,
-        //                       "total_students": 30, "warnings": [...] }
-        // On failure: enrolment numbers default to zero in the response.
-        try {
-            $enrolmentResponse = Http::withToken($token)
-                ->timeout(5)
-                ->get(config('services.enrolment.url') . '/api/school/enrolments/statistics');
+        $cohortCounts = $this->fetchCohortCounts($token);
 
-            if ($enrolmentResponse->successful()) {
-                $enrolmentStats = $enrolmentResponse->json();
-            } else {
-                $warnings[] = [
-                    'type' => 'service_degraded',
-                    'message' => 'Enrolment service is unavailable',
-                    'severity' => 'warning',
-                ];
-            }
-        } catch (\Exception $e) {
-            $warnings[] = [
-                'type' => 'service_degraded',
-                'message' => 'Enrolment service is unavailable',
-                'severity' => 'warning',
-            ];
-        }
-
-        // --- HTTP Call #3: Enrolment Service (port 8003) — cohort list endpoint ---
-        // Fetches all cohorts to compute status counts (active, completed, upcoming).
-        // This is a separate call from the statistics endpoint because the statistics
-        // endpoint returns student-level aggregates, not cohort-level breakdowns.
-        // Expected response: { "data": [ { "id": 1, "status": "active", ... }, ... ] }
-        // On failure: all cohort counts remain zero.
-        $cohortCounts = ['active' => 0, 'completed' => 0, 'upcoming' => 0, 'total' => 0];
-        try {
-            $cohortsResponse = Http::withToken($token)
-                ->timeout(5)
-                ->get(config('services.enrolment.url') . '/api/school/cohorts');
-
-            if ($cohortsResponse->successful()) {
-                $cohorts = collect($cohortsResponse->json('data', []));
-                $cohortCounts = [
-                    'active' => $cohorts->where('status', 'active')->count(),
-                    'completed' => $cohorts->where('status', 'completed')->count(),
-                    // 'not_started' is the Enrolment Service's status value for upcoming cohorts
-                    'upcoming' => $cohorts->where('status', 'not_started')->count(),
-                    'total' => $cohorts->count(),
-                ];
-            }
-        } catch (\Exception $e) {
-            // Degraded — cohort counts stay at zero
-        }
-
-        // The enrolment statistics endpoint may include its own warnings (e.g.,
-        // students enrolled but not assigned to any cohort). Merge them into our
-        // top-level warnings array so the frontend sees all issues in one place.
+        // Merge downstream warnings into our top-level warnings array
         if ($enrolmentStats && isset($enrolmentStats['warnings'])) {
             $warnings = array_merge($warnings, $enrolmentStats['warnings']);
         }
 
-        // Extract values with null-coalescing defaults so the response structure
-        // is always consistent, even when a downstream service is unavailable
         $totalEnrolled = $enrolmentStats['enrolled'] ?? 0;
         $assigned = $enrolmentStats['assigned'] ?? 0;
         $notAssigned = $enrolmentStats['not_assigned'] ?? 0;
@@ -189,12 +114,8 @@ class DashboardService
         $activeExperiences = array_filter($experiences, fn($e) => ($e['status'] ?? '') === 'active');
 
         return [
-            'school' => [
-                'id' => $school->id,
-                'name' => $school->name,
-            ],
+            'school' => ['id' => $school->id, 'name' => $school->name],
             'summary' => [
-                // These delegate to the injected progress provider (mock in D1)
                 'problems_tackled' => $this->progressProvider->countProblemsTackled($experiences),
                 'active_ventures' => count($activeExperiences),
                 'students' => $totalStudents,
@@ -209,14 +130,70 @@ class DashboardService
                 'not_assigned' => $notAssigned,
             ],
             'statistics' => [
-                // Enrolment rate = fraction of all students who are enrolled in at least one cohort
                 'enrolment_rate' => $totalStudents > 0 ? round($totalEnrolled / $totalStudents, 2) : 0,
-                // These are placeholders for D1 — will be computed from real data in D2
                 'average_completion' => 0.0,
                 'average_credit_progress' => 0.0,
             ],
             'warnings' => $warnings,
         ];
+    }
+
+    /**
+     * Make an HTTP GET call to a downstream service with graceful degradation.
+     *
+     * On failure (network error or non-2xx response), adds a warning to the
+     * warnings array and returns null. The caller can then use null-coalescing
+     * defaults for a partial response.
+     */
+    private function fetchServiceData(string $url, string $token, string $failureMessage, array &$warnings): ?array
+    {
+        try {
+            $response = Http::withToken($token)->timeout(5)->get($url);
+            if ($response->successful()) {
+                return $response->json();
+            }
+        } catch (\Exception $e) {
+            // Degraded — fall through to warning
+        }
+
+        $warnings[] = [
+            'type' => 'service_degraded',
+            'message' => $failureMessage,
+            'severity' => 'warning',
+        ];
+
+        return null;
+    }
+
+    /**
+     * Fetch cohort status counts from the Enrolment Service.
+     *
+     * Returns a breakdown of active, completed, and upcoming cohorts.
+     * Falls back to all-zero counts on failure.
+     */
+    private function fetchCohortCounts(string $token): array
+    {
+        $defaults = ['active' => 0, 'completed' => 0, 'upcoming' => 0, 'total' => 0];
+
+        try {
+            $response = Http::withToken($token)
+                ->timeout(5)
+                ->get(config('services.enrolment.url') . '/api/school/cohorts');
+
+            if ($response->successful()) {
+                $cohorts = collect($response->json('data', []));
+                return [
+                    'active' => $cohorts->where('status', 'active')->count(),
+                    'completed' => $cohorts->where('status', 'completed')->count(),
+                    'upcoming' => $cohorts->where('status', 'not_started')->count(),
+                    'total' => $cohorts->count(),
+                ];
+            }
+        } catch (\Exception $e) {
+            // Degraded — return zero counts
+        }
+
+        return $defaults;
     }
 
     /**

@@ -133,52 +133,58 @@ class EnrolmentService
 
         $students = $query->paginate($perPage);
 
-        // Transform each User model into the enriched response format.
-        // For each student, we load their enrolments and compute the assignment status.
         $students->getCollection()->transform(function (User $student) {
-            // Load all enrolments for this student with cohort and experience data
-            $enrolments = CohortEnrolment::where('student_id', $student->id)
-                ->with(['cohort.experience'])
-                ->get();
-
-            // Build the cohort assignments array for the response
-            $assignments = $enrolments->map(function (CohortEnrolment $enrolment) {
-                return [
-                    'cohort_id' => $enrolment->cohort_id,
-                    'cohort_name' => $enrolment->cohort?->name,
-                    'experience_name' => $enrolment->cohort?->experience?->name,
-                    'status' => $enrolment->status,
-                    'enrolled_at' => $enrolment->enrolled_at?->toIso8601String(),
-                ];
-            });
-
-            // Determine the student's overall assignment status.
-            // "assigned" requires at least one enrolled status in an active cohort.
-            $hasActiveEnrolment = $enrolments->contains(function (CohortEnrolment $e) {
-                return $e->status === 'enrolled' && $e->cohort && $e->cohort->status === 'active';
-            });
-
-            // "removed" means the student had enrolments but all were removed.
-            $allRemoved = $enrolments->isNotEmpty() && $enrolments->every(fn($e) => $e->status === 'removed');
-
-            if ($hasActiveEnrolment) {
-                $assignmentStatus = 'assigned';
-            } elseif ($allRemoved) {
-                $assignmentStatus = 'removed';
-            } else {
-                $assignmentStatus = 'not_assigned';
-            }
-
-            return [
-                'student_id' => $student->id,
-                'name' => $student->name,
-                'email' => $student->email,
-                'cohort_assignments' => $assignments,
-                'assignment_status' => $assignmentStatus,
-            ];
+            return $this->transformStudentWithAssignments($student);
         });
 
         return $students;
+    }
+
+    /**
+     * Transform a student model into the enriched response with cohort assignments.
+     */
+    private function transformStudentWithAssignments(User $student): array
+    {
+        $enrolments = CohortEnrolment::where('student_id', $student->id)
+            ->with(['cohort.experience'])
+            ->get();
+
+        $assignments = $enrolments->map(fn(CohortEnrolment $e) => [
+            'cohort_id' => $e->cohort_id,
+            'cohort_name' => $e->cohort?->name,
+            'experience_name' => $e->cohort?->experience?->name,
+            'status' => $e->status,
+            'enrolled_at' => $e->enrolled_at?->toIso8601String(),
+        ]);
+
+        return [
+            'student_id' => $student->id,
+            'name' => $student->name,
+            'email' => $student->email,
+            'cohort_assignments' => $assignments,
+            'assignment_status' => $this->determineAssignmentStatus($enrolments),
+        ];
+    }
+
+    /**
+     * Determine a student's overall assignment status from their enrolments.
+     *
+     * Returns 'assigned' if the student has an active enrolment in an active cohort,
+     * 'removed' if all enrolments are removed, or 'not_assigned' otherwise.
+     */
+    private function determineAssignmentStatus(\Illuminate\Database\Eloquent\Collection $enrolments): string
+    {
+        $hasActiveEnrolment = $enrolments->contains(function (CohortEnrolment $e) {
+            return $e->status === 'enrolled' && $e->cohort && $e->cohort->status === 'active';
+        });
+
+        if ($hasActiveEnrolment) {
+            return 'assigned';
+        }
+
+        $allRemoved = $enrolments->isNotEmpty() && $enrolments->every(fn($e) => $e->status === 'removed');
+
+        return $allRemoved ? 'removed' : 'not_assigned';
     }
 
     /**
@@ -309,8 +315,26 @@ class EnrolmentService
         $assigned = $activeStudentIds->count();
         $notAssigned = $totalStudents - $assigned;
 
-        // Build warnings array — these surface actionable alerts on the admin dashboard
+        return [
+            'total_students' => $totalStudents,
+            'enrolled' => $enrolledStudentIds->count(),
+            'assigned' => $assigned,
+            'not_assigned' => $notAssigned,
+            'removed' => $removedCount,
+            'warnings' => $this->generateWarnings($schoolId, $notAssigned),
+        ];
+    }
+
+    /**
+     * Generate actionable warnings for the statistics panel.
+     *
+     * Checks for unassigned students and cohorts nearing capacity.
+     * Separated from calculateStatistics() to isolate warning logic.
+     */
+    private function generateWarnings(int $schoolId, int $notAssigned): array
+    {
         $warnings = [];
+
         if ($notAssigned > 0) {
             $warnings[] = [
                 'type' => 'unassigned_students',
@@ -319,17 +343,12 @@ class EnrolmentService
             ];
         }
 
-        // Check capacity warnings for active cohorts.
-        // withCount() adds an active_enrolments_count attribute to each cohort
-        // via a single subquery, avoiding N+1 when checking capacity.
         $cohorts = Cohort::where('school_id', $schoolId)
             ->where('status', 'active')
             ->withCount(['activeEnrolments'])
             ->get();
 
         foreach ($cohorts as $cohort) {
-            // Only check cohorts that have a defined capacity (null = unlimited)
-            // Threshold is 90%: alert before the cohort is completely full
             if ($cohort->capacity && $cohort->active_enrolments_count >= $cohort->capacity * 0.9) {
                 $warnings[] = [
                     'type' => 'capacity_warning',
@@ -339,14 +358,7 @@ class EnrolmentService
             }
         }
 
-        return [
-            'total_students' => $totalStudents,
-            'enrolled' => $enrolledStudentIds->count(),
-            'assigned' => $assigned,
-            'not_assigned' => $notAssigned,
-            'removed' => $removedCount,
-            'warnings' => $warnings,
-        ];
+        return $warnings;
     }
 
     /**

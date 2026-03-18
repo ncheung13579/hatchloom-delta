@@ -83,23 +83,7 @@ class ExperienceScreenService
                     });
                 }
 
-                // Flatten the nested structure into one record per student-cohort assignment.
-                // A student enrolled in 2 cohorts of the same experience produces 2 rows.
-                // This matches how the UI renders the student list table.
-                foreach ($students as $student) {
-                    foreach ($student['cohort_assignments'] ?? [] as $assignment) {
-                        $data[] = [
-                            'student_id' => $student['student_id'],
-                            'student_name' => $student['name'] ?? 'Unknown',
-                            'student_email' => $student['email'] ?? '',
-                            'cohort_id' => $assignment['cohort_id'],
-                            'cohort_name' => $assignment['cohort_name'] ?? '',
-                            'status' => $assignment['status'] ?? 'enrolled',
-                            'enrolled_at' => $assignment['enrolled_at'] ?? '',
-                        ];
-                    }
-                }
-
+                $data = $this->flattenStudentCohortAssignments($students, includeStudentId: true);
                 $total = count($data);
             }
         } catch (\Exception $e) {
@@ -138,19 +122,7 @@ class ExperienceScreenService
 
             if ($response->successful()) {
                 $students = collect($response->json('data', []));
-
-                // Build one CSV row per student-cohort assignment.
-                foreach ($students as $student) {
-                    foreach ($student['cohort_assignments'] ?? [] as $assignment) {
-                        $rows[] = [
-                            'student_name' => $student['name'] ?? 'Unknown',
-                            'student_email' => $student['email'] ?? '',
-                            'cohort_name' => $assignment['cohort_name'] ?? '',
-                            'status' => $assignment['status'] ?? 'enrolled',
-                            'enrolled_at' => $assignment['enrolled_at'] ?? '',
-                        ];
-                    }
-                }
+                $rows = $this->flattenStudentCohortAssignments($students, includeStudentId: false);
             }
         } catch (\Exception $e) {
             // Degraded — return empty export on failure
@@ -297,5 +269,36 @@ class ExperienceScreenService
                 'students_with_credits' => 0,
             ],
         ];
+    }
+
+    /**
+     * Flatten nested student-cohort data into one row per assignment.
+     *
+     * Shared by getEnrolledStudents() and exportStudentList() to eliminate
+     * duplicated iteration logic. A student enrolled in 2 cohorts produces 2 rows.
+     */
+    private function flattenStudentCohortAssignments(\Illuminate\Support\Collection $students, bool $includeStudentId): array
+    {
+        $rows = [];
+
+        foreach ($students as $student) {
+            foreach ($student['cohort_assignments'] ?? [] as $assignment) {
+                $row = [
+                    'student_name' => $student['name'] ?? 'Unknown',
+                    'student_email' => $student['email'] ?? '',
+                    'cohort_name' => $assignment['cohort_name'] ?? '',
+                    'status' => $assignment['status'] ?? 'enrolled',
+                    'enrolled_at' => $assignment['enrolled_at'] ?? '',
+                ];
+
+                if ($includeStudentId) {
+                    $row = ['student_id' => $student['student_id'], 'cohort_id' => $assignment['cohort_id']] + $row;
+                }
+
+                $rows[] = $row;
+            }
+        }
+
+        return $rows;
     }
 }

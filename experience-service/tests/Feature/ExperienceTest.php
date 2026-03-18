@@ -30,13 +30,12 @@ class ExperienceTest extends TestCase
         ]);
 
         $this->admin = User::create([
-            'id' => 1,
             'name' => 'Admin User',
             'email' => 'admin@ridgewood.edu',
             'password' => bcrypt('password'),
             'role' => 'school_admin',
             'school_id' => $this->school->id,
-        ]);
+        ]); // auto-increment ID 1 → matches TOKEN_MAP 'test-admin-token'
     }
 
     private function authHeaders(): array
@@ -199,11 +198,56 @@ class ExperienceTest extends TestCase
             ]);
     }
 
+    // ── Authentication & Authorization ──────────────────────
+
     public function test_unauthenticated_request_returns_401(): void
     {
         $response = $this->getJson('/api/school/experiences');
 
-        $response->assertStatus(401);
+        $response->assertStatus(401)
+            ->assertJsonFragment([
+                'error' => true,
+                'code' => 'UNAUTHENTICATED',
+            ]);
+    }
+
+    public function test_invalid_token_returns_401(): void
+    {
+        $response = $this->getJson('/api/school/experiences', [
+            'Authorization' => 'Bearer completely-invalid-token',
+        ]);
+
+        $response->assertStatus(401)
+            ->assertJsonFragment([
+                'error' => true,
+                'code' => 'UNAUTHENTICATED',
+            ]);
+    }
+
+    public function test_student_role_returns_403(): void
+    {
+        // Create filler users so auto-increment reaches ID 4
+        // (setUp already created admin as ID 1)
+        User::create(['name' => 'Teacher', 'email' => 'teacher@ridgewood.edu', 'password' => bcrypt('password'), 'role' => 'school_teacher', 'school_id' => $this->school->id]);
+        User::create(['name' => 'Filler', 'email' => 'filler@ridgewood.edu', 'password' => bcrypt('password'), 'role' => 'school_teacher', 'school_id' => $this->school->id]);
+        $student = User::create([
+            'name' => 'Student 1',
+            'email' => 'student1@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'student',
+            'school_id' => $this->school->id,
+        ]);
+        $this->assertEquals(4, $student->id);
+
+        $response = $this->getJson('/api/school/experiences', [
+            'Authorization' => 'Bearer test-student-token',
+        ]);
+
+        $response->assertStatus(403)
+            ->assertJsonFragment([
+                'error' => true,
+                'code' => 'FORBIDDEN',
+            ]);
     }
 
     public function test_can_search_students_in_experience(): void
@@ -254,6 +298,27 @@ class ExperienceTest extends TestCase
 
         $response->assertStatus(200);
         $this->assertStringContainsString('text/csv', $response->headers->get('Content-Type'));
+
+        // Validate CSV content structure and data
+        $content = $response->streamedContent();
+        $lines = explode("\n", trim($content));
+
+        // Verify header row
+        $headers = str_getcsv($lines[0]);
+        $this->assertContains('student_name', $headers);
+        $this->assertContains('student_email', $headers);
+        $this->assertContains('cohort_name', $headers);
+        $this->assertContains('status', $headers);
+        $this->assertContains('enrolled_at', $headers);
+
+        // Verify data row matches the mocked student
+        $this->assertGreaterThanOrEqual(2, count($lines));
+        $dataRow = str_getcsv($lines[1]);
+        $row = array_combine($headers, $dataRow);
+        $this->assertEquals('Alice Alpha', $row['student_name']);
+        $this->assertEquals('alice@test.com', $row['student_email']);
+        $this->assertEquals('Cohort Alpha', $row['cohort_name']);
+        $this->assertEquals('enrolled', $row['status']);
     }
 
     public function test_can_get_student_detail_in_experience(): void

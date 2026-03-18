@@ -74,23 +74,7 @@ class CohortController extends Controller
         // CohortService handles the filtered query — SchoolScope ensures tenant isolation
         $cohorts = $this->cohortService->listCohorts($experienceId, $status, $search);
 
-        // Transform each Cohort model into a flat JSON-friendly array.
-        // We compute student_count and removed_count here so the frontend gets
-        // pre-aggregated data in the list view (avoids N+1 on the client side).
-        $data = $cohorts->map(function ($cohort) {
-            return [
-                'id' => $cohort->id,
-                'name' => $cohort->name,
-                'experience_id' => $cohort->experience_id,
-                'status' => $cohort->status,
-                'teacher_name' => $cohort->teacher?->name,
-                'student_count' => $cohort->activeEnrolments()->count(),
-                'removed_count' => $cohort->removedCount(),
-                'capacity' => $cohort->capacity,
-                'start_date' => $cohort->start_date?->format('Y-m-d'),
-                'end_date' => $cohort->end_date?->format('Y-m-d'),
-            ];
-        });
+        $data = $cohorts->map(fn($cohort) => $cohort->toApiArray());
 
         return response()->json(['data' => $data]);
     }
@@ -148,25 +132,10 @@ class CohortController extends Controller
         $cohort = $this->cohortService->getCohort($id);
 
         if (!$cohort) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Cohort not found',
-                'code' => 'NOT_FOUND',
-            ], 404);
+            return $this->notFoundResponse('Cohort not found');
         }
 
-        return response()->json([
-            'id' => $cohort->id,
-            'name' => $cohort->name,
-            'experience_id' => $cohort->experience_id,
-            'status' => $cohort->status,
-            'teacher_name' => $cohort->teacher?->name,
-            'student_count' => $cohort->activeEnrolments()->count(),
-            'removed_count' => $cohort->removedCount(),
-            'capacity' => $cohort->capacity,
-            'start_date' => $cohort->start_date?->format('Y-m-d'),
-            'end_date' => $cohort->end_date?->format('Y-m-d'),
-        ]);
+        return response()->json($cohort->toApiArray());
     }
 
     /**
@@ -182,11 +151,7 @@ class CohortController extends Controller
         $cohort = $this->cohortService->getCohort($id);
 
         if (!$cohort) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Cohort not found',
-                'code' => 'NOT_FOUND',
-            ], 404);
+            return $this->notFoundResponse('Cohort not found');
         }
 
         $validated = $request->validate([
@@ -225,21 +190,13 @@ class CohortController extends Controller
         $cohort = $this->cohortService->getCohort($id);
 
         if (!$cohort) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Cohort not found',
-                'code' => 'NOT_FOUND',
-            ], 404);
+            return $this->notFoundResponse('Cohort not found');
         }
 
-        // activateCohort() delegates to the Cohort model's State pattern.
-        // Returns false if the current state does not permit activation.
-        if (!$this->cohortService->activateCohort($cohort)) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Cohort is already active or completed',
-                'code' => 'INVALID_STATE_TRANSITION',
-            ], 409);
+        // Inline: calls the Cohort model's State pattern directly.
+        // activateCohort() in CohortService was a pure pass-through (Middle Man).
+        if (!$cohort->activate()) {
+            return $this->errorResponse('Cohort is already active or completed', 'INVALID_STATE_TRANSITION', 409);
         }
 
         return response()->json([
@@ -263,21 +220,13 @@ class CohortController extends Controller
         $cohort = $this->cohortService->getCohort($id);
 
         if (!$cohort) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Cohort not found',
-                'code' => 'NOT_FOUND',
-            ], 404);
+            return $this->notFoundResponse('Cohort not found');
         }
 
-        // completeCohort() delegates to the Cohort model's State pattern.
-        // Returns false if the current state does not permit completion.
-        if (!$this->cohortService->completeCohort($cohort)) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Cohort must be active to complete',
-                'code' => 'INVALID_STATE_TRANSITION',
-            ], 409);
+        // Inline: calls the Cohort model's State pattern directly.
+        // completeCohort() in CohortService was a pure pass-through (Middle Man).
+        if (!$cohort->complete()) {
+            return $this->errorResponse('Cohort must be active to complete', 'INVALID_STATE_TRANSITION', 409);
         }
 
         return response()->json([
@@ -285,5 +234,29 @@ class CohortController extends Controller
             'name' => $cohort->name,
             'status' => $cohort->status,
         ]);
+    }
+
+    /**
+     * Build a standardized error response.
+     *
+     * Eliminates 6 duplicated error response blocks across this controller.
+     */
+    private function errorResponse(string $message, string $code, int $status): JsonResponse
+    {
+        return response()->json([
+            'error' => true,
+            'message' => $message,
+            'code' => $code,
+        ], $status);
+    }
+
+    /**
+     * Build a 404 not-found error response.
+     *
+     * Convenience wrapper for the most common error case in this controller.
+     */
+    private function notFoundResponse(string $message): JsonResponse
+    {
+        return $this->errorResponse($message, 'NOT_FOUND', 404);
     }
 }

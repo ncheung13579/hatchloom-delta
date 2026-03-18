@@ -29,22 +29,36 @@ class DashboardTest extends TestCase
         ]);
 
         $this->admin = User::create([
-            'id' => 1,
             'name' => 'Admin User',
             'email' => 'admin@ridgewood.edu',
             'password' => bcrypt('password'),
             'role' => 'school_admin',
             'school_id' => $this->school->id,
-        ]);
+        ]); // auto-increment ID 1 → matches TOKEN_MAP 'test-admin-token'
+
+        User::create([
+            'name' => 'Teacher',
+            'email' => 'teacher@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'school_teacher',
+            'school_id' => $this->school->id,
+        ]); // auto-increment ID 2
+
+        User::create([
+            'name' => 'Filler',
+            'email' => 'filler@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'school_teacher',
+            'school_id' => $this->school->id,
+        ]); // auto-increment ID 3
 
         $this->student = User::create([
-            'id' => 10,
             'name' => 'Student 1',
             'email' => 'student1@ridgewood.edu',
             'password' => bcrypt('password'),
             'role' => 'student',
             'school_id' => $this->school->id,
-        ]);
+        ]); // auto-increment ID 4 → matches TOKEN_MAP 'test-student-token'
     }
 
     private function authHeaders(): array
@@ -124,11 +138,31 @@ class DashboardTest extends TestCase
         $this->assertContains('service_degraded', $warningTypes);
     }
 
+    // ── Authentication & Authorization ──────────────────────
+
     public function test_unauthenticated_request_returns_401(): void
     {
         $response = $this->getJson('/api/school/dashboard');
 
-        $response->assertStatus(401);
+        $response->assertStatus(401)
+            ->assertJsonFragment([
+                'error' => true,
+                'code' => 'UNAUTHENTICATED',
+            ]);
+    }
+
+    public function test_student_role_returns_403(): void
+    {
+        // Student user (ID 4) already created in setUp via auto-increment
+        $response = $this->getJson('/api/school/dashboard', [
+            'Authorization' => 'Bearer test-student-token',
+        ]);
+
+        $response->assertStatus(403)
+            ->assertJsonFragment([
+                'error' => true,
+                'code' => 'FORBIDDEN',
+            ]);
     }
 
     public function test_can_get_student_drill_down(): void

@@ -29,6 +29,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Enums\CohortStatus;
 use App\Models\Cohort;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -100,7 +101,7 @@ class CohortService
             'experience_id' => $data['experience_id'],
             'school_id' => Auth::user()->school_id, // Always use the authenticated user's school
             'name' => $data['name'],
-            'status' => 'not_started', // State pattern: all cohorts start here
+            'status' => CohortStatus::NOT_STARTED->value,
             'teacher_id' => $data['teacher_id'] ?? null,
             'capacity' => $data['capacity'] ?? null,
             'start_date' => $data['start_date'],

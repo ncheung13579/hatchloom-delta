@@ -57,6 +57,7 @@ class MockAuthMiddleware
     private const TOKEN_MAP = [
         'test-admin-token' => 1,
         'test-teacher-token' => 2,
+        'test-student-token' => 4,
     ];
 
     public function handle(Request $request, Closure $next): Response

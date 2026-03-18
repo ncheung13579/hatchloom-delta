@@ -30,13 +30,12 @@ class CohortTest extends TestCase
         ]);
 
         $this->admin = User::create([
-            'id' => 1,
             'name' => 'Admin User',
             'email' => 'admin@ridgewood.edu',
             'password' => bcrypt('password'),
             'role' => 'school_admin',
             'school_id' => $this->school->id,
-        ]);
+        ]); // auto-increment ID 1 → matches TOKEN_MAP 'test-admin-token'
 
         $this->experience = Experience::create([
             'school_id' => $this->school->id,
@@ -255,6 +254,59 @@ class CohortTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonCount(1, 'data')
             ->assertJsonFragment(['name' => 'Cohort for Exp 1']);
+    }
+
+    // ── Authentication & Authorization ──────────────────────
+
+    public function test_unauthenticated_request_returns_401(): void
+    {
+        $response = $this->getJson('/api/school/cohorts');
+
+        $response->assertStatus(401)
+            ->assertJsonFragment([
+                'error' => true,
+                'code' => 'UNAUTHENTICATED',
+            ]);
+    }
+
+    public function test_invalid_token_returns_401(): void
+    {
+        $response = $this->getJson('/api/school/cohorts', [
+            'Authorization' => 'Bearer completely-invalid-token',
+        ]);
+
+        $response->assertStatus(401)
+            ->assertJsonFragment([
+                'error' => true,
+                'code' => 'UNAUTHENTICATED',
+            ]);
+    }
+
+    public function test_student_role_returns_403(): void
+    {
+        // Create filler users so auto-increment reaches ID 4
+        // (setUp already created admin as ID 1)
+        User::create(['name' => 'Teacher', 'email' => 'teacher@ridgewood.edu', 'password' => bcrypt('password'), 'role' => 'school_teacher', 'school_id' => $this->school->id]);
+        User::create(['name' => 'Filler', 'email' => 'filler@ridgewood.edu', 'password' => bcrypt('password'), 'role' => 'school_teacher', 'school_id' => $this->school->id]);
+        $student = User::create([
+            'name' => 'Student 1',
+            'email' => 'student1@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'student',
+            'school_id' => $this->school->id,
+        ]);
+        // Verify auto-increment gave us ID 4 (matches TOKEN_MAP)
+        $this->assertEquals(4, $student->id);
+
+        $response = $this->getJson('/api/school/cohorts', [
+            'Authorization' => 'Bearer test-student-token',
+        ]);
+
+        $response->assertStatus(403)
+            ->assertJsonFragment([
+                'error' => true,
+                'code' => 'FORBIDDEN',
+            ]);
     }
 
     // ── Edge cases ─────────────────────────────────────────────
