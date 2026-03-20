@@ -161,11 +161,13 @@ All authenticated endpoints require an `Authorization: Bearer {token}` header. F
 |-------|------|------|--------|
 | `test-admin-token` | Admin User (id=1) | school_admin | Ridgewood Academy (id=1) |
 | `test-teacher-token` | Ms. Smith (id=2) | school_teacher | Ridgewood Academy (id=1) |
-| `test-student-token` | Student (id=4) | student | Ridgewood Academy (id=1) |
+| `test-student-token` | Student 1 (id=4) | student | Ridgewood Academy (id=1) |
+| `test-parent-token` | Parent of Student 1 (id=14) | parent | Ridgewood Academy (id=1) |
 
 **Role permissions:**
 - `school_admin` and `school_teacher` — Full access to all endpoints (read + write)
-- `student` — Read-only access (can view dashboards, experiences, cohorts, enrolments; cannot create, update, or delete)
+- `student` — Read-only access, scoped to own data (can view their own enrolments, experiences, dashboard; cannot create, update, or delete)
+- `parent` — Read-only access, scoped to their child's data (same as student but sees their linked child's records via `parent_of` column)
 
 Example request:
 ```bash
@@ -219,7 +221,7 @@ That's it. Migrations and seeding happen automatically — no extra commands nee
 
 ### Authentication
 
-Use one of three bearer tokens in the `Authorization` header:
+Use one of four bearer tokens in the `Authorization` header:
 
 ```bash
 # Admin (full access)
@@ -228,17 +230,20 @@ curl -H "Authorization: Bearer test-admin-token" http://localhost:8003/api/schoo
 # Teacher (full access)
 curl -H "Authorization: Bearer test-teacher-token" http://localhost:8003/api/school/cohorts
 
-# Student (read-only access)
+# Student (read-only, own data only)
 curl -H "Authorization: Bearer test-student-token" http://localhost:8003/api/school/enrolments
+
+# Parent (read-only, child's data only — parent_of links to Student 1, user_id 4)
+curl -H "Authorization: Bearer test-parent-token" http://localhost:8003/api/school/enrolments
 ```
 
-Students can **read** all endpoints but cannot create, update, or delete resources (403 Forbidden on write attempts).
+Students and parents can **read** endpoints but cannot create, update, or delete resources (403 Forbidden on write attempts). Data is scoped: students see only their own records; parents see only their linked child's records.
 
 ### Seeded test data
 
 All services are pre-seeded with:
 - **1 school:** Ridgewood Academy (id=1)
-- **13 users:** 1 admin (id=1), 2 teachers (id=2,3), 10 students (id=4-13)
+- **14 users:** 1 admin (id=1), 2 teachers (id=2,3), 10 students (id=4-13), 1 parent (id=14, linked to student id=4)
 - **2 experiences:** Business Foundations, Tech Explorers (with 5 courses)
 - **3 cohorts:** Cohort A (active, 6 students), Cohort B (not_started), Cohort C (active, 2 students)
 - **5 mock courses:** IDs 1-5 (hardcoded via MockCourseDataProvider)

@@ -55,6 +55,7 @@ class MockAuthMiddleware
         'test-admin-token' => 1,
         'test-teacher-token' => 2,
         'test-student-token' => 4,
+        'test-parent-token' => 14,
     ];
 
     /**

@@ -51,7 +51,7 @@ Route::prefix('school')->group(function () {
     // that the user has the school_admin or school_teacher role.
     // Read-only endpoints — accessible by admins, teachers, AND students.
     // The Dashboard is read-only so all roles can view it safely.
-    Route::middleware('mock.auth:student')->group(function () {
+    Route::middleware('mock.auth:student,parent')->group(function () {
         // Main dashboard overview — aggregates Experience + Enrolment service data
         Route::get('dashboard', [DashboardController::class, 'index']);
 

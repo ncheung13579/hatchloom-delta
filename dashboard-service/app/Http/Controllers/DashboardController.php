@@ -30,6 +30,7 @@ namespace App\Http\Controllers;
 
 use App\Services\DashboardService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
@@ -68,10 +69,25 @@ class DashboardController extends Controller
      */
     public function studentDrillDown(int $studentId): JsonResponse
     {
+        // Students can only view their own drill-down; parents can view their child's.
+        $user = Auth::user();
+        if ($user->role === 'student' && $user->id !== $studentId) {
+            return response()->json([
+                'error' => true,
+                'message' => 'Forbidden',
+                'code' => 'FORBIDDEN',
+            ], 403);
+        }
+        if ($user->role === 'parent' && $user->parent_of !== $studentId) {
+            return response()->json([
+                'error' => true,
+                'message' => 'Forbidden',
+                'code' => 'FORBIDDEN',
+            ], 403);
+        }
+
         $result = $this->dashboardService->getStudentDrillDown($studentId);
 
-        // Null means the student either doesn't exist or belongs to a different school.
-        // Both cases surface as 404 to avoid leaking whether a student ID exists.
         if (!$result) {
             return response()->json([
                 'error' => true,

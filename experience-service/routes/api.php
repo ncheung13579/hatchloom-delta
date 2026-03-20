@@ -52,7 +52,7 @@ Route::prefix('school')->group(function () {
     // All routes inside this group require a valid bearer token (mock auth for D1).
     // The middleware alias 'mock.auth' is registered in the application's kernel/bootstrap.
     // Read-only endpoints — accessible by admins, teachers, AND students.
-    Route::middleware('mock.auth:student')->group(function () {
+    Route::middleware('mock.auth:student,parent')->group(function () {
         // --- Screen 302 sub-resource routes (read-only) ---
         // These MUST be registered before apiResource to prevent the {id} wildcard
         // from swallowing path segments like "students" or "contents" as an experience ID.

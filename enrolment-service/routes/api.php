@@ -75,7 +75,7 @@ Route::prefix('school')->group(function () {
     ]));
 
     // Read-only endpoints — accessible by admins, teachers, AND students.
-    Route::middleware('mock.auth:student')->group(function () {
+    Route::middleware('mock.auth:student,parent')->group(function () {
         Route::get('cohorts', [CohortController::class, 'index']);
         Route::get('cohorts/{id}', [CohortController::class, 'show'])->where('id', '[0-9]+');
 

@@ -92,6 +92,14 @@ class EnrolmentController extends Controller
                 : null,
         ], fn($value) => $value !== null);
 
+        // Students and parents can only see the authenticated student's own data.
+        $user = Auth::user();
+        if ($user->role === 'student') {
+            $filters['student_id'] = $user->id;
+        } elseif ($user->role === 'parent' && $user->parent_of) {
+            $filters['student_id'] = $user->parent_of;
+        }
+
         $overview = $this->enrolmentService->getEnrolmentOverview($search, $perPage, $filters);
 
         return response()->json([
@@ -253,6 +261,15 @@ class EnrolmentController extends Controller
      */
     public function studentDetail(int $studentId): JsonResponse
     {
+        // Students can only view their own detail; parents can view their child's.
+        $user = Auth::user();
+        if ($user->role === 'student' && $user->id !== $studentId) {
+            return $this->errorResponse('Forbidden', 'FORBIDDEN', 403);
+        }
+        if ($user->role === 'parent' && $user->parent_of !== $studentId) {
+            return $this->errorResponse('Forbidden', 'FORBIDDEN', 403);
+        }
+
         $detail = $this->enrolmentService->getStudentDetail($studentId);
 
         if ($detail === null) {

@@ -67,6 +67,19 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
+        // Parent user — linked to Student 1 (user_id 4) for Team Romeo's parent dashboard
+        DB::table('users')->insertOrIgnore([
+            'id' => 14,
+            'name' => 'Parent of Student 1',
+            'email' => 'parent1@ridgewood.edu',
+            'password' => Hash::make('password'),
+            'role' => 'parent',
+            'school_id' => 1,
+            'parent_of' => 4,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         // Seed experiences (reference data for cohorts FK)
         DB::table('experiences')->insertOrIgnore([
             [
