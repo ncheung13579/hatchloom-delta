@@ -65,7 +65,15 @@ class MockAuthMiddleware
      *   - 403 Forbidden: valid user but wrong role (e.g., a student token somehow)
      *   - Pass through: user is authenticated and authorized, request continues to controller
      */
-    public function handle(Request $request, Closure $next): Response
+    /**
+     * Authenticate the request and enforce role-based access control.
+     *
+     * Accepts optional extra roles as middleware parameters. By default only
+     * school_admin and school_teacher are allowed. Routes can opt in to
+     * additional roles, e.g.: middleware('mock.auth:student') to also
+     * allow the student role on read-only endpoints.
+     */
+    public function handle(Request $request, Closure $next, string ...$extraRoles): Response
     {
         $token = $request->bearerToken();
 
@@ -96,9 +104,9 @@ class MockAuthMiddleware
         //   - SchoolScope can read school_id for tenant filtering
         Auth::login($user);
 
-        // Role-based authorization: only school admins and teachers can use the
-        // Experience Service. Students and other roles get a 403 Forbidden.
-        $allowedRoles = ['school_admin', 'school_teacher'];
+        // Role-based authorization: school_admin and school_teacher are always
+        // allowed. Additional roles can be granted per-route via middleware params.
+        $allowedRoles = array_merge(['school_admin', 'school_teacher'], $extraRoles);
         if (!in_array($user->role, $allowedRoles)) {
             return response()->json([
                 'error' => true,

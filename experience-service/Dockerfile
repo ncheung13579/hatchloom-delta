@@ -15,6 +15,9 @@ RUN composer dump-autoload --optimize
 
 RUN php artisan key:generate --force || true
 
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 8002
 
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8002"]
+CMD ["docker-entrypoint.sh"]

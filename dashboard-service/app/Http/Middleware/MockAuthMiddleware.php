@@ -58,7 +58,15 @@ class MockAuthMiddleware
         'test-student-token' => 4,
     ];
 
-    public function handle(Request $request, Closure $next): Response
+    /**
+     * Authenticate the request and enforce role-based access control.
+     *
+     * Accepts optional extra roles as middleware parameters. By default only
+     * school_admin and school_teacher are allowed. Routes can opt in to
+     * additional roles, e.g.: middleware('mock.auth:student') to also
+     * allow the student role on read-only endpoints.
+     */
+    public function handle(Request $request, Closure $next, string ...$extraRoles): Response
     {
         $token = $request->bearerToken();
 
@@ -87,11 +95,9 @@ class MockAuthMiddleware
         // and $request->user() to access the current user's identity and school_id
         Auth::login($user);
 
-        // Role-based access control: only school_admin and school_teacher can
-        // access the dashboard. Students and other roles get a 403 Forbidden.
-        // This is separate from authentication (401) — the user IS who they
-        // claim to be, but they don't have permission for this resource.
-        $allowedRoles = ['school_admin', 'school_teacher'];
+        // Role-based access control: school_admin and school_teacher are always
+        // allowed. Additional roles can be granted per-route via middleware params.
+        $allowedRoles = array_merge(['school_admin', 'school_teacher'], $extraRoles);
         if (!in_array($user->role, $allowedRoles)) {
             return response()->json([
                 'error' => true,

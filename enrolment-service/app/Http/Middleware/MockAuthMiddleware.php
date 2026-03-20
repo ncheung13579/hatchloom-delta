@@ -60,10 +60,16 @@ class MockAuthMiddleware
         'test-student-token' => 4,
     ];
 
-    public function handle(Request $request, Closure $next): Response
+    /**
+     * Authenticate the request and enforce role-based access control.
+     *
+     * Accepts optional extra roles as middleware parameters. By default only
+     * school_admin and school_teacher are allowed. Routes can opt in to
+     * additional roles, e.g.: middleware('mock.auth:student') to also
+     * allow the student role on read-only endpoints.
+     */
+    public function handle(Request $request, Closure $next, string ...$extraRoles): Response
     {
-        // Step 1-2: Extract bearer token and look up in the hardcoded map.
-        // bearerToken() returns null if no Authorization: Bearer header is present.
         $token = $request->bearerToken();
 
         if (!$token || !isset(self::TOKEN_MAP[$token])) {
@@ -74,8 +80,6 @@ class MockAuthMiddleware
             ], 401);
         }
 
-        // Step 3: Load the User from the database. This could fail if the seed
-        // data is missing, so we treat a missing user the same as a bad token.
         $user = User::find(self::TOKEN_MAP[$token]);
 
         if (!$user) {
@@ -86,16 +90,11 @@ class MockAuthMiddleware
             ], 401);
         }
 
-        // Step 4: Log the user into Laravel's auth system. This makes
-        // Auth::user() and $request->user() return this user for the
-        // remainder of the request. Crucially, this also enables the
-        // SchoolScope global scope to read the authenticated user's school_id.
         Auth::login($user);
 
-        // Step 5: Role-based access control. Only school admins and teachers
-        // can access the Enrolment Service endpoints. Students and other roles
-        // are blocked with HTTP 403 Forbidden.
-        $allowedRoles = ['school_admin', 'school_teacher'];
+        // Role-based access control: school_admin and school_teacher are always
+        // allowed. Additional roles can be granted per-route via middleware params.
+        $allowedRoles = array_merge(['school_admin', 'school_teacher'], $extraRoles);
         if (!in_array($user->role, $allowedRoles)) {
             return response()->json([
                 'error' => true,
@@ -104,7 +103,6 @@ class MockAuthMiddleware
             ], 403);
         }
 
-        // Step 6: All checks passed — forward to the next middleware or controller.
         return $next($request);
     }
 }

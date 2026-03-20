@@ -51,8 +51,9 @@ Route::prefix('school')->group(function () {
 
     // All routes inside this group require a valid bearer token (mock auth for D1).
     // The middleware alias 'mock.auth' is registered in the application's kernel/bootstrap.
-    Route::middleware('mock.auth')->group(function () {
-        // --- Screen 302 sub-resource routes ---
+    // Read-only endpoints — accessible by admins, teachers, AND students.
+    Route::middleware('mock.auth:student')->group(function () {
+        // --- Screen 302 sub-resource routes (read-only) ---
         // These MUST be registered before apiResource to prevent the {id} wildcard
         // from swallowing path segments like "students" or "contents" as an experience ID.
         Route::get('experiences/{id}/students/export', [ExperienceScreenController::class, 'exportStudents'])->where('id', '[0-9]+');
@@ -61,11 +62,15 @@ Route::prefix('school')->group(function () {
         Route::get('experiences/{id}/contents', [ExperienceScreenController::class, 'contents'])->where('id', '[0-9]+');
         Route::get('experiences/{id}/statistics', [ExperienceScreenController::class, 'statistics'])->where('id', '[0-9]+');
 
-        // --- Screen 301 CRUD routes ---
-        // apiResource() generates: index, store, show, update, destroy
-        // It does NOT generate create or edit (those are form-display routes for Blade,
-        // which we don't use in an API-only service).
-        Route::apiResource('experiences', ExperienceController::class)
-            ->where(['experience' => '[0-9]+']);
+        // Screen 301 read-only routes (list + detail)
+        Route::get('experiences', [ExperienceController::class, 'index']);
+        Route::get('experiences/{id}', [ExperienceController::class, 'show'])->where('id', '[0-9]+');
+    });
+
+    // Write endpoints — admin and teacher only (no student access).
+    Route::middleware('mock.auth')->group(function () {
+        Route::post('experiences', [ExperienceController::class, 'store']);
+        Route::put('experiences/{id}', [ExperienceController::class, 'update'])->where('id', '[0-9]+');
+        Route::delete('experiences/{id}', [ExperienceController::class, 'destroy'])->where('id', '[0-9]+');
     });
 });

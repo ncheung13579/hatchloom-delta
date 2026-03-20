@@ -151,18 +151,15 @@ class DashboardTest extends TestCase
             ]);
     }
 
-    public function test_student_role_returns_403(): void
+    public function test_student_role_can_read_dashboard(): void
     {
-        // Student user (ID 4) already created in setUp via auto-increment
+        // Student user (ID 4) already created in setUp via auto-increment.
+        // All dashboard endpoints are read-only, so students have access.
         $response = $this->getJson('/api/school/dashboard', [
             'Authorization' => 'Bearer test-student-token',
         ]);
 
-        $response->assertStatus(403)
-            ->assertJsonFragment([
-                'error' => true,
-                'code' => 'FORBIDDEN',
-            ]);
+        $response->assertStatus(200);
     }
 
     public function test_can_get_student_drill_down(): void

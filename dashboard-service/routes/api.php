@@ -49,7 +49,9 @@ Route::prefix('school')->group(function () {
     // All remaining routes require authentication via MockAuthMiddleware.
     // The middleware resolves the bearer token to a User model and enforces
     // that the user has the school_admin or school_teacher role.
-    Route::middleware('mock.auth')->group(function () {
+    // Read-only endpoints — accessible by admins, teachers, AND students.
+    // The Dashboard is read-only so all roles can view it safely.
+    Route::middleware('mock.auth:student')->group(function () {
         // Main dashboard overview — aggregates Experience + Enrolment service data
         Route::get('dashboard', [DashboardController::class, 'index']);
 

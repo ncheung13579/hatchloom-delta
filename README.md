@@ -54,21 +54,18 @@ All three services connect to a single shared PostgreSQL database. Each service 
 git clone <repo-url> hatchloom-delta
 cd hatchloom-delta
 
-# Build and start all services
+# Build and start all services — migrations and seeding run automatically on startup
 docker compose up --build -d
 
-# Run migrations and seed data for each service
-docker compose exec experience-service php artisan migrate --seed
-docker compose exec enrolment-service php artisan migrate --seed
-docker compose exec dashboard-service php artisan migrate --seed
-
-# Verify all services are running
+# Verify all services are running (may take 10-15 seconds for first startup)
 curl http://localhost:8001/api/school/dashboard/health
 curl http://localhost:8002/api/school/experiences/health
 curl http://localhost:8003/api/school/enrolments/health
 ```
 
 Each health endpoint returns `{ "status": "ok", "service": "<name>", "timestamp": "..." }`.
+
+> **Note:** Each service automatically waits for PostgreSQL, runs migrations, and seeds test data on startup. No manual migration commands are needed.
 
 ## Local Development (Without Docker)
 
@@ -166,6 +163,10 @@ All authenticated endpoints require an `Authorization: Bearer {token}` header. F
 | `test-teacher-token` | Ms. Smith (id=2) | school_teacher | Ridgewood Academy (id=1) |
 | `test-student-token` | Student (id=4) | student | Ridgewood Academy (id=1) |
 
+**Role permissions:**
+- `school_admin` and `school_teacher` — Full access to all endpoints (read + write)
+- `student` — Read-only access (can view dashboards, experiences, cohorts, enrolments; cannot create, update, or delete)
+
 Example request:
 ```bash
 curl -H "Authorization: Bearer test-admin-token" http://localhost:8002/api/school/experiences
@@ -201,12 +202,83 @@ GitHub Actions runs on push to `main` and on pull requests. The pipeline:
 
 See `.github/workflows/ci.yml` for details.
 
+## For Integrating Teams
+
+If you are integrating with Team Delta's services (e.g., Team Romeo, Team Papa, Team Quebec), here is everything you need to know:
+
+### Getting started
+
+```bash
+git clone <repo-url> hatchloom-delta && cd hatchloom-delta
+docker compose up --build -d
+# Wait ~15 seconds, then verify:
+curl http://localhost:8001/api/school/dashboard/health
+```
+
+That's it. Migrations and seeding happen automatically — no extra commands needed.
+
+### Authentication
+
+Use one of three bearer tokens in the `Authorization` header:
+
+```bash
+# Admin (full access)
+curl -H "Authorization: Bearer test-admin-token" http://localhost:8003/api/school/cohorts
+
+# Teacher (full access)
+curl -H "Authorization: Bearer test-teacher-token" http://localhost:8003/api/school/cohorts
+
+# Student (read-only access)
+curl -H "Authorization: Bearer test-student-token" http://localhost:8003/api/school/enrolments
+```
+
+Students can **read** all endpoints but cannot create, update, or delete resources (403 Forbidden on write attempts).
+
+### Seeded test data
+
+All services are pre-seeded with:
+- **1 school:** Ridgewood Academy (id=1)
+- **13 users:** 1 admin (id=1), 2 teachers (id=2,3), 10 students (id=4-13)
+- **2 experiences:** Business Foundations, Tech Explorers (with 5 courses)
+- **3 cohorts:** Cohort A (active, 6 students), Cohort B (not_started), Cohort C (active, 2 students)
+- **5 mock courses:** IDs 1-5 (hardcoded via MockCourseDataProvider)
+- **Sample credential data:** 2 earned + 1 in-progress per student (mock)
+
+### Response format
+
+All endpoints use a consistent envelope:
+
+```json
+// Success (list)
+{ "data": [...], "meta": { "current_page": 1, "last_page": 1, "per_page": 15, "total": 3 } }
+
+// Success (single resource)
+{ "id": 1, "name": "Cohort A", "status": "active", ... }
+
+// Error
+{ "error": true, "message": "Human-readable message", "code": "MACHINE_READABLE_CODE" }
+```
+
+Error codes: `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `INVALID_STATE_TRANSITION` (409), `VALIDATION_ERROR` (422).
+
+### Integration test examples
+
+The `run-integration-tests.sh` script contains 100+ working curl examples covering every endpoint, every error case, and cross-service communication. Use it as your integration specification.
+
+### Key things to know
+
+- **Tokens are forwarded:** When Dashboard Service calls Experience/Enrolment, it forwards your bearer token. One token works across the whole chain.
+- **Cohorts have a state machine:** `not_started` → `active` → `completed` (one-directional, no going back). Use PATCH for transitions.
+- **Soft deletes:** Removing a student from a cohort sets status to `removed`, not a hard delete. Archiving an experience sets `is_archived=true`.
+- **CSV exports:** Available on experience students, enrolments. Returns `text/csv` content type.
+- **Cross-service graceful degradation:** If Experience or Enrolment service is down, Dashboard returns 200 with zeroed-out data instead of failing.
+
 ## Known Limitations (D1)
 
 - **Authentication is mocked** -- hardcoded bearer token-to-user mapping; no real OAuth/JWT auth system.
-- **Course data is mocked** -- the course catalogue from Team Papa is provided by a `MockCourseDataProvider` class rather than real HTTP calls.
+- **Course data is mocked** -- the course catalogue from Team Papa is provided by a `MockCourseDataProvider` class rather than real HTTP calls. Only course IDs 1-5 exist.
 - **No real inter-team integration** -- all cross-team data (courses, credentials, LaunchPad) is seeded or hardcoded.
-- **Credential data returns empty arrays** -- Karl's credential engine is not yet integrated.
+- **Credential data is mocked** -- returns sample data (2 earned, 1 in-progress) for all students. Real credential engine (Karl's Role B) is not yet integrated.
 - **School scoping uses mock data** -- only one school (Ridgewood Academy) is seeded; multi-tenant isolation is implemented but not tested across multiple schools.
 - **No API gateway** -- services call each other directly over the Docker network.
 

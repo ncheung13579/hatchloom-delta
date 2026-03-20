@@ -55,9 +55,31 @@ class MockCredentialDataProvider implements CredentialDataProviderInterface
     public function getStudentCredentialSummary(int $studentId): array
     {
         return [
-            'total_earned' => 0,
-            'in_progress' => 0,
-            'details' => [],
+            'total_earned' => 2,
+            'in_progress' => 1,
+            'details' => [
+                [
+                    'id' => 1,
+                    'name' => 'Entrepreneurial Thinking Foundations',
+                    'type' => 'credential',
+                    'status' => 'earned',
+                    'earned_at' => '2026-02-15',
+                ],
+                [
+                    'id' => 2,
+                    'name' => 'Financial Literacy Completion',
+                    'type' => 'certificate',
+                    'status' => 'earned',
+                    'earned_at' => '2026-03-05',
+                ],
+                [
+                    'id' => 3,
+                    'name' => 'Marketing Basics Badge',
+                    'type' => 'badge',
+                    'status' => 'in_progress',
+                    'earned_at' => null,
+                ],
+            ],
         ];
     }
 }

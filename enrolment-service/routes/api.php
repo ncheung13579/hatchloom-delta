@@ -74,15 +74,21 @@ Route::prefix('school')->group(function () {
         'timestamp' => now()->toIso8601String(),
     ]));
 
-    // All routes below require a valid bearer token (mock auth for D1).
-    Route::middleware('mock.auth')->group(function () {
+    // Read-only endpoints — accessible by admins, teachers, AND students.
+    Route::middleware('mock.auth:student')->group(function () {
+        Route::get('cohorts', [CohortController::class, 'index']);
+        Route::get('cohorts/{id}', [CohortController::class, 'show'])->where('id', '[0-9]+');
 
-        // Cohort CRUD — uses apiResource which registers GET index, GET show,
-        // POST store, PUT/PATCH update. DELETE (destroy) is excluded because
-        // cohorts are never deleted — they are completed instead.
-        Route::apiResource('cohorts', CohortController::class)
-            ->except(['destroy'])
-            ->where(['cohort' => '[0-9]+']);
+        Route::get('enrolments', [EnrolmentController::class, 'index']);
+        Route::get('enrolments/statistics', [EnrolmentController::class, 'statistics']);
+        Route::get('enrolments/students/{studentId}', [EnrolmentController::class, 'studentDetail'])->where('studentId', '[0-9]+');
+        Route::get('enrolments/export', [EnrolmentController::class, 'export']);
+    });
+
+    // Write endpoints — admin and teacher only (no student access).
+    Route::middleware('mock.auth')->group(function () {
+        Route::post('cohorts', [CohortController::class, 'store']);
+        Route::put('cohorts/{id}', [CohortController::class, 'update'])->where('id', '[0-9]+');
 
         // State transition endpoints — PATCH is used (not PUT) because these
         // are partial updates that change only the status field.
@@ -93,12 +99,5 @@ Route::prefix('school')->group(function () {
         // to a specific cohort.
         Route::post('cohorts/{cohortId}/enrolments', [EnrolmentController::class, 'enrol'])->where('cohortId', '[0-9]+');
         Route::delete('cohorts/{cohortId}/enrolments/{studentId}', [EnrolmentController::class, 'remove'])->where(['cohortId' => '[0-9]+', 'studentId' => '[0-9]+']);
-
-        // Enrolment overview and analysis — top-level endpoints (not nested under
-        // a specific cohort) because they provide school-wide views.
-        Route::get('enrolments', [EnrolmentController::class, 'index']);
-        Route::get('enrolments/statistics', [EnrolmentController::class, 'statistics']);
-        Route::get('enrolments/students/{studentId}', [EnrolmentController::class, 'studentDetail'])->where('studentId', '[0-9]+');
-        Route::get('enrolments/export', [EnrolmentController::class, 'export']);
     });
 });

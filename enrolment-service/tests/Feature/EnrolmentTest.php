@@ -731,9 +731,22 @@ class EnrolmentTest extends TestCase
             ]);
     }
 
-    public function test_student_role_returns_403(): void
+    public function test_student_role_can_read_enrolments(): void
     {
+        // Students can read enrolment data (read-only access)
         $response = $this->getJson('/api/school/enrolments', [
+            'Authorization' => 'Bearer test-student-token',
+        ]);
+
+        $response->assertStatus(200);
+    }
+
+    public function test_student_role_cannot_enrol(): void
+    {
+        // Students cannot perform write operations
+        $response = $this->postJson("/api/school/cohorts/{$this->activeCohort->id}/enrolments", [
+            'student_id' => $this->student->id,
+        ], [
             'Authorization' => 'Bearer test-student-token',
         ]);
 

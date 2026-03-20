@@ -224,7 +224,7 @@ class ExperienceTest extends TestCase
             ]);
     }
 
-    public function test_student_role_returns_403(): void
+    public function test_student_role_can_read_experiences(): void
     {
         // Create filler users so auto-increment reaches ID 4
         // (setUp already created admin as ID 1)
@@ -239,10 +239,35 @@ class ExperienceTest extends TestCase
         ]);
         $this->assertEquals(4, $student->id);
 
+        // Students can read experiences (read-only access)
         $response = $this->getJson('/api/school/experiences', [
             'Authorization' => 'Bearer test-student-token',
         ]);
+        $response->assertStatus(200);
+    }
 
+    public function test_student_role_cannot_create_experience(): void
+    {
+        // Create filler users so auto-increment reaches ID 4
+        User::create(['name' => 'Teacher', 'email' => 'teacher@ridgewood.edu', 'password' => bcrypt('password'), 'role' => 'school_teacher', 'school_id' => $this->school->id]);
+        User::create(['name' => 'Filler', 'email' => 'filler@ridgewood.edu', 'password' => bcrypt('password'), 'role' => 'school_teacher', 'school_id' => $this->school->id]);
+        $student = User::create([
+            'name' => 'Student 1',
+            'email' => 'student1@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'student',
+            'school_id' => $this->school->id,
+        ]);
+        $this->assertEquals(4, $student->id);
+
+        // Students cannot create experiences (write access blocked)
+        $response = $this->postJson('/api/school/experiences', [
+            'name' => 'Test Experience',
+            'description' => 'Test',
+            'course_ids' => [1],
+        ], [
+            'Authorization' => 'Bearer test-student-token',
+        ]);
         $response->assertStatus(403)
             ->assertJsonFragment([
                 'error' => true,
