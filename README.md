@@ -158,12 +158,13 @@ All authenticated endpoints require `Authorization: Bearer {token}` header.
 
 ## Authentication (Mock -- D1)
 
-All authenticated endpoints require an `Authorization: Bearer {token}` header. For D1, authentication is mocked with hardcoded token-to-user mappings:
+All authenticated endpoints require an `Authorization: Bearer {token}` header. For D1, authentication is mocked with three hardcoded token-to-user mappings:
 
 | Token | User | Role | School |
 |-------|------|------|--------|
 | `test-admin-token` | Admin User (id=1) | school_admin | Ridgewood Academy (id=1) |
 | `test-teacher-token` | Ms. Smith (id=2) | school_teacher | Ridgewood Academy (id=1) |
+| `test-student-token` | Student (id=4) | student | Ridgewood Academy (id=1) |
 
 Example request:
 ```bash
