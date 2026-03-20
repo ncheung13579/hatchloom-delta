@@ -54,8 +54,12 @@ class EngagementChartWidget implements DashboardWidget
             ->where('role', 'student')
             ->get();
 
+        // Convert Eloquent models to plain arrays — keeps the interface
+        // framework-agnostic so external teams can implement it via HTTP.
+        $studentData = $students->map(fn(User $s) => ['id' => $s->id, 'name' => $s->name])->values()->toArray();
+
         // Delegate to the Strategy provider for raw engagement data
-        $engagementData = $this->progressProvider->getEngagementRates($students);
+        $engagementData = $this->progressProvider->getEngagementRates($studentData);
         $studentEngagement = $engagementData['student_engagement'] ?? [];
         $schoolAverages = $engagementData['school_averages'] ?? [];
 

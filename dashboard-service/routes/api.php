@@ -10,13 +10,15 @@
  *   PUBLIC (no auth):
  *     GET /api/school/dashboard/health — Health check for Docker/load balancer
  *
- *   AUTHENTICATED (mock.auth middleware):
+ *   AUTHENTICATED — admin/teacher only (mock.auth):
  *     GET /api/school/dashboard                          — Full dashboard overview
- *     GET /api/school/dashboard/students/{studentId}     — Student drill-down
  *     GET /api/school/dashboard/reporting/pos-coverage    — R3: PoS curriculum coverage
  *     GET /api/school/dashboard/reporting/engagement      — R3: Engagement rates
  *     GET /api/school/dashboard/widgets                   — All widgets (Factory Method)
  *     GET /api/school/dashboard/widgets/{type}            — Single widget by type
+ *
+ *   AUTHENTICATED — all roles (mock.auth:student,parent):
+ *     GET /api/school/dashboard/students/{studentId}     — Student drill-down (scoped by controller)
  *
  * Middleware stack for authenticated routes:
  *   1. 'mock.auth' (MockAuthMiddleware) — Validates bearer token, resolves user,
@@ -46,17 +48,12 @@ Route::prefix('school')->group(function () {
         'timestamp' => now()->toIso8601String(),
     ]));
 
-    // All remaining routes require authentication via MockAuthMiddleware.
-    // The middleware resolves the bearer token to a User model and enforces
-    // that the user has the school_admin or school_teacher role.
-    // Read-only endpoints — accessible by admins, teachers, AND students.
-    // The Dashboard is read-only so all roles can view it safely.
-    Route::middleware('mock.auth:student,parent')->group(function () {
+    // School-wide dashboard endpoints — admin and teacher only.
+    // These return aggregated data across all students/cohorts in the school,
+    // so students and parents must NOT have access.
+    Route::middleware('mock.auth')->group(function () {
         // Main dashboard overview — aggregates Experience + Enrolment service data
         Route::get('dashboard', [DashboardController::class, 'index']);
-
-        // Student drill-down — detailed view for a single student by user ID
-        Route::get('dashboard/students/{studentId}', [DashboardController::class, 'studentDrillDown']);
 
         // R3 reporting endpoints — Alberta PoS coverage and engagement metrics
         Route::get('dashboard/reporting/pos-coverage', [DashboardController::class, 'posCoverage']);
@@ -66,5 +63,12 @@ Route::prefix('school')->group(function () {
         Route::get('dashboard/widgets', [DashboardController::class, 'widgets']);
         // {type} is one of: cohort_summary, student_table, engagement_chart
         Route::get('dashboard/widgets/{type}', [DashboardController::class, 'widget']);
+    });
+
+    // Student drill-down — accessible by admins, teachers, students, and parents.
+    // Controller enforces that students can only view their own data and parents
+    // can only view their child's data (see DashboardController::studentDrillDown).
+    Route::middleware('mock.auth:student,parent')->group(function () {
+        Route::get('dashboard/students/{studentId}', [DashboardController::class, 'studentDrillDown']);
     });
 });

@@ -26,6 +26,17 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Represents an educational institution (tenant) in the Hatchloom platform.
+ *
+ * Read-only reference model -- the schools table is shared infrastructure
+ * seeded by all three microservices. The School is the root of the multi-
+ * tenancy hierarchy: all Users, Experiences, and Cohorts belong to a School.
+ * SchoolScope on the Cohort model uses the authenticated user's school_id
+ * to enforce automatic tenant isolation at the query level.
+ *
+ * @see \App\Models\Scopes\SchoolScope  Automatic tenant filtering
+ */
 class School extends Model
 {
     /**

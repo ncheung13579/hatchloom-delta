@@ -13,11 +13,11 @@ declare(strict_types=1);
  * When an enrolment changes, the dashboard's cached counts become stale. This
  * listener is the mechanism for notifying the dashboard of changes.
  *
- * D1 BEHAVIOR (current):
+ * CURRENT BEHAVIOR (mock):
  *   Logs a structured message with the new active enrolment count, cohort details,
  *   and school_id. This demonstrates the Observer pattern is correctly wired.
  *
- * D2+ BEHAVIOR (planned):
+ * WHEN REAL SERVICES ARE INTEGRATED:
  *   Would send an HTTP request to the Dashboard Service's webhook endpoint to
  *   trigger a cache refresh or real-time update push to the frontend.
  *
@@ -43,10 +43,10 @@ use Illuminate\Support\Facades\Log;
 /**
  * Listens to enrolment and removal events to log dashboard count changes.
  *
- * In production (D2+), this listener would send an HTTP notification to the
- * Dashboard Service so it can refresh its cached aggregation counts. For D1,
- * it logs the count-affecting event with enough detail to verify the Observer
- * pattern is wired correctly.
+ * When real services are integrated, this listener would send an HTTP notification
+ * to the Dashboard Service so it can refresh its cached aggregation counts.
+ * Currently, it logs the count-affecting event with enough detail to verify the
+ * Observer pattern is wired correctly.
  */
 class UpdateDashboardCounts
 {

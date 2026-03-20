@@ -5,13 +5,21 @@
 set -e
 
 echo "Waiting for PostgreSQL..."
-until php -r "new PDO('pgsql:host=${DB_HOST};port=${DB_PORT};dbname=${DB_DATABASE}', '${DB_USERNAME}', '${DB_PASSWORD}');" 2>/dev/null; do
+until php -d display_errors=0 -r "@new PDO('pgsql:host=${DB_HOST};port=${DB_PORT};dbname=${DB_DATABASE}', '${DB_USERNAME}', '${DB_PASSWORD}');" 2>/dev/null; do
     sleep 1
 done
 echo "PostgreSQL is ready."
 
 echo "Running migrations and seeding..."
-php artisan migrate --seed --force 2>/dev/null || true
+# Retry loop: all services share one DB and race to create tables.
+# If another service is migrating simultaneously, we wait and retry.
+for attempt in 1 2 3 4 5; do
+    if php artisan migrate --seed --force 2>&1; then
+        break
+    fi
+    echo "Migration attempt $attempt failed (likely race condition), retrying in 3s..."
+    sleep 3
+done
 
 echo "Starting Experience Service on port 8002..."
 exec php artisan serve --host=0.0.0.0 --port=8002

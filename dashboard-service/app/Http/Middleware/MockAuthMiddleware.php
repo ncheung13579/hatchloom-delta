@@ -1,7 +1,7 @@
 <?php
 
 /**
- * MockAuthMiddleware — D1 mock authentication for the Dashboard Service.
+ * MockAuthMiddleware — Mock authentication for the Dashboard Service.
  *
  * Request lifecycle position:
  *   This middleware runs BEFORE the request reaches any controller. It is
@@ -16,7 +16,7 @@
  *   5. If any step fails, returns a 401 (Unauthenticated) or 403 (Forbidden)
  *
  * Why mock auth?
- *   For D1, Team Quebec's real authentication service is not yet integrated.
+ *   Currently, Team Quebec's real authentication service is not yet integrated.
  *   All three Delta services (Dashboard, Experience, Enrolment) use the same
  *   mock auth pattern with identical token mappings, so a request can flow
  *   through the entire microservice chain with a single bearer token.

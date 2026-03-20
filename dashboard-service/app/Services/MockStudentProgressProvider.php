@@ -4,7 +4,7 @@
  * MockStudentProgressProvider — Sample data for student progress and engagement metrics.
  *
  * Design pattern: Strategy (concrete implementation)
- *   This class is the D1 concrete Strategy for StudentProgressProviderInterface.
+ *   This class is the mock implementation of StudentProgressProviderInterface.
  *   It returns a mix of deterministic and randomized sample data to simulate
  *   realistic student progress metrics without requiring real course completion
  *   data from Team Papa's Course Service or Karl's credential engine.
@@ -19,11 +19,11 @@
  * Note on rand() usage:
  *   The PoS coverage and engagement methods use rand() to generate different
  *   values per student per request. This means responses are not deterministic
- *   across requests — acceptable for D1 demo purposes but would be an issue
+ *   across requests — acceptable for development/demo purposes but would be an issue
  *   for automated testing. A real implementation would derive stable values
  *   from actual database records.
  *
- * How to replace with real data (post-D1):
+ * How to replace with real data (when real services are integrated):
  *   1. Create a new class implementing StudentProgressProviderInterface
  *   2. Query Team Papa's Course Service for completion data
  *   3. Query Karl's credential tables for credit and PoS coverage
@@ -39,8 +39,6 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Contracts\StudentProgressProviderInterface;
-use App\Models\User;
-use Illuminate\Support\Collection;
 
 class MockStudentProgressProvider implements StudentProgressProviderInterface
 {
@@ -97,12 +95,12 @@ class MockStudentProgressProvider implements StudentProgressProviderInterface
      * across all students. The ?: fallback values (0.45, 0.38, 0.52) are used
      * when the collection is empty (no students) to avoid returning null.
      */
-    public function getPosCoverage(Collection $students): array
+    public function getPosCoverage(array $students): array
     {
-        $coverage = $students->map(function (User $student) {
+        $coverage = array_map(function (array $student) {
             return [
-                'student_id' => $student->id,
-                'student_name' => $student->name,
+                'student_id' => $student['id'],
+                'student_name' => $student['name'],
                 'coverage' => [
                     'business_studies' => [
                         'completed' => rand(2, 6),
@@ -122,14 +120,18 @@ class MockStudentProgressProvider implements StudentProgressProviderInterface
                 ],
                 'overall_coverage' => round(rand(25, 70) / 100, 2),
             ];
-        });
+        }, $students);
+
+        $bsPercentages = array_column(array_column(array_column($coverage, 'coverage'), 'business_studies'), 'percentage');
+        $ctfPercentages = array_column(array_column(array_column($coverage, 'coverage'), 'ctf_design_studies'), 'percentage');
+        $calmPercentages = array_column(array_column(array_column($coverage, 'coverage'), 'calm'), 'percentage');
 
         return [
-            'student_coverage' => $coverage->values()->toArray(),
+            'student_coverage' => array_values($coverage),
             'school_averages' => [
-                'business_studies' => round($coverage->avg('coverage.business_studies.percentage') ?: 0.45, 2),
-                'ctf_design_studies' => round($coverage->avg('coverage.ctf_design_studies.percentage') ?: 0.38, 2),
-                'calm' => round($coverage->avg('coverage.calm.percentage') ?: 0.52, 2),
+                'business_studies' => count($bsPercentages) > 0 ? round(array_sum($bsPercentages) / count($bsPercentages), 2) : 0.45,
+                'ctf_design_studies' => count($ctfPercentages) > 0 ? round(array_sum($ctfPercentages) / count($ctfPercentages), 2) : 0.38,
+                'calm' => count($calmPercentages) > 0 ? round(array_sum($calmPercentages) / count($calmPercentages), 2) : 0.52,
             ],
         ];
     }
@@ -145,17 +147,17 @@ class MockStudentProgressProvider implements StudentProgressProviderInterface
      * completion_rate is between 0.0 and 1.0. last_active_at is randomized
      * within the last 7 days to simulate recent activity.
      */
-    public function getEngagementRates(Collection $students): array
+    public function getEngagementRates(array $students): array
     {
-        $studentEngagement = $students->map(function (User $student) {
+        $studentEngagement = array_map(function (array $student) {
             $loginDays = rand(5, 20);
             $activitiesCompleted = rand(3, 30);
             // Ensure total >= completed so completion_rate stays in [0, 1]
             $totalActivities = rand($activitiesCompleted, $activitiesCompleted + 15);
 
             return [
-                'student_id' => $student->id,
-                'student_name' => $student->name,
+                'student_id' => $student['id'],
+                'student_name' => $student['name'],
                 'login_days_last_30' => $loginDays,
                 'activities_completed' => $activitiesCompleted,
                 'total_activities' => $totalActivities,
@@ -164,14 +166,17 @@ class MockStudentProgressProvider implements StudentProgressProviderInterface
                     : 0.0,
                 'last_active_at' => now()->subDays(rand(0, 7))->toIso8601String(),
             ];
-        });
+        }, $students);
+
+        $loginDays = array_column($studentEngagement, 'login_days_last_30');
+        $completionRates = array_column($studentEngagement, 'completion_rate');
 
         return [
-            'student_engagement' => $studentEngagement->values()->toArray(),
+            'student_engagement' => array_values($studentEngagement),
             'school_averages' => [
-                'avg_login_days' => round($studentEngagement->avg('login_days_last_30') ?: 0, 1),
-                'avg_completion_rate' => round($studentEngagement->avg('completion_rate') ?: 0, 2),
-                'active_student_count' => $students->count(),
+                'avg_login_days' => count($loginDays) > 0 ? round(array_sum($loginDays) / count($loginDays), 1) : 0,
+                'avg_completion_rate' => count($completionRates) > 0 ? round(array_sum($completionRates) / count($completionRates), 2) : 0,
+                'active_student_count' => count($students),
             ],
         ];
     }

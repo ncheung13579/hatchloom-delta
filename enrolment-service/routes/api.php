@@ -74,14 +74,20 @@ Route::prefix('school')->group(function () {
         'timestamp' => now()->toIso8601String(),
     ]));
 
-    // Read-only endpoints — accessible by admins, teachers, AND students.
+    // Read-only endpoints — accessible by admins, teachers, students, and parents.
+    // Students see only their own data (auto-filtered by EnrolmentService).
+    // Parents see only their linked child's data.
     Route::middleware('mock.auth:student,parent')->group(function () {
         Route::get('cohorts', [CohortController::class, 'index']);
         Route::get('cohorts/{id}', [CohortController::class, 'show'])->where('id', '[0-9]+');
 
         Route::get('enrolments', [EnrolmentController::class, 'index']);
-        Route::get('enrolments/statistics', [EnrolmentController::class, 'statistics']);
         Route::get('enrolments/students/{studentId}', [EnrolmentController::class, 'studentDetail'])->where('studentId', '[0-9]+');
+    });
+
+    // Admin/teacher-only read endpoints — school-wide data and exports.
+    Route::middleware('mock.auth')->group(function () {
+        Route::get('enrolments/statistics', [EnrolmentController::class, 'statistics']);
         Route::get('enrolments/export', [EnrolmentController::class, 'export']);
     });
 

@@ -10,7 +10,7 @@
  *
  * Strategy pattern (SDD Section 6.4):
  *   - Interface: CourseDataProviderInterface (this file)
- *   - D1 concrete strategy: MockCourseDataProvider (static in-memory data)
+ *   - Mock implementation: MockCourseDataProvider (static in-memory data)
  *   - Future concrete strategy: HttpCourseDataProvider (real HTTP calls to Team Papa's API)
  *
  * How swapping works:
@@ -25,7 +25,7 @@
  *   what course data is returned, without needing a running Course Service. Example:
  *     $this->app->bind(CourseDataProviderInterface::class, FakeProvider::class);
  *
- * @see \App\Services\MockCourseDataProvider   D1 implementation with hardcoded data
+ * @see \App\Services\MockCourseDataProvider   Mock implementation with hardcoded data
  * @see \App\Providers\AppServiceProvider      Where the binding is configured
  */
 
@@ -38,7 +38,9 @@ interface CourseDataProviderInterface
     /**
      * Return the full course catalogue as an indexed array of course arrays.
      *
-     * Each course array has: id, name, description, blocks (array of lesson/challenge items).
+     * Each course array has: id, name, description, blocks.
+     * Each block has: id, name, status (locked/active/complete).
+     * In production, blocks will also contain nested nodes and activity_cards.
      *
      * @return array<int, array{id: int, name: string, description: string, blocks: array}>
      */

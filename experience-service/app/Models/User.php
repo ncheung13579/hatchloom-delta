@@ -42,7 +42,7 @@ class User extends Authenticatable
      * Mass-assignable fields.
      *   - name: Full display name
      *   - email: Login email address
-     *   - password: Hashed password (not used in D1 mock auth, but present for schema completeness)
+     *   - password: Hashed password (not used in mock auth, but present for schema completeness)
      *   - role: One of 'school_admin', 'school_teacher', 'student'
      *   - school_id: FK to the schools table — determines tenant isolation
      */

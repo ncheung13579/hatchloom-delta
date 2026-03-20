@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   postgres:
     image: postgres:16-alpine
@@ -10,6 +9,66 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hatchloom -d hatchloom"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  enrolment-service:
+    build: ./enrolment-service
+    ports:
+      - "8003:8003"
+    environment:
+      APP_NAME: EnrolmentService
+      APP_KEY: base64:dGVzdGtleWZvcmVucm9sbWVudHNlcnZpY2Ux
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: hatchloom
+      DB_USERNAME: hatchloom
+      DB_PASSWORD: secret
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('localhost', 8003) ? 0 : 1);"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  experience-service:
+    build: ./experience-service
+    ports:
+      - "8002:8002"
+    environment:
+      APP_NAME: ExperienceService
+      APP_KEY: base64:dGVzdGtleWZvcmV4cGVyaWVuY2VzZXJ2aWNl
+      APP_ENV: local
+      APP_DEBUG: "true"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: hatchloom
+      DB_USERNAME: hatchloom
+      DB_PASSWORD: secret
+      ENROLMENT_SERVICE_URL: http://enrolment-service:8003
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+    depends_on:
+      enrolment-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('localhost', 8002) ? 0 : 1);"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
 
   dashboard-service:
     build: ./dashboard-service
@@ -31,50 +90,10 @@ services:
       CACHE_STORE: array
       SESSION_DRIVER: array
     depends_on:
-      - postgres
-      - experience-service
-      - enrolment-service
-
-  experience-service:
-    build: ./experience-service
-    ports:
-      - "8002:8002"
-    environment:
-      APP_NAME: ExperienceService
-      APP_KEY: base64:dGVzdGtleWZvcmV4cGVyaWVuY2VzZXJ2aWNl
-      APP_ENV: local
-      APP_DEBUG: "true"
-      DB_CONNECTION: pgsql
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_DATABASE: hatchloom
-      DB_USERNAME: hatchloom
-      DB_PASSWORD: secret
-      ENROLMENT_SERVICE_URL: http://enrolment-service:8003
-      CACHE_STORE: array
-      SESSION_DRIVER: array
-    depends_on:
-      - postgres
-
-  enrolment-service:
-    build: ./enrolment-service
-    ports:
-      - "8003:8003"
-    environment:
-      APP_NAME: EnrolmentService
-      APP_KEY: base64:dGVzdGtleWZvcmVucm9sbWVudHNlcnZpY2Ux
-      APP_ENV: local
-      APP_DEBUG: "true"
-      DB_CONNECTION: pgsql
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_DATABASE: hatchloom
-      DB_USERNAME: hatchloom
-      DB_PASSWORD: secret
-      CACHE_STORE: array
-      SESSION_DRIVER: array
-    depends_on:
-      - postgres
+      experience-service:
+        condition: service_healthy
+      enrolment-service:
+        condition: service_healthy
 
 volumes:
   pgdata:

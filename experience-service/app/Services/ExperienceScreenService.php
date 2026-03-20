@@ -161,9 +161,9 @@ class ExperienceScreenService
                 if ($student) {
                     $assignment = collect($student['cohort_assignments'] ?? [])->first();
                     if ($assignment) {
-                        // Credit data is stubbed with zeros for D1. Real credit/progress
-                        // tracking requires integration with Team Papa's Course Service
-                        // and Karl's credential engine, both planned for D2.
+                        // Credit data is stubbed with zeros when using mock providers. Real
+                        // credit/progress tracking requires integration with Team Papa's
+                        // Course Service and Karl's credential engine.
                         return [
                             'student_id' => $studentId,
                             'student_name' => $student['name'] ?? 'Unknown',
@@ -174,9 +174,9 @@ class ExperienceScreenService
                             'status' => $assignment['status'] ?? 'enrolled',
                             'enrolled_at' => $assignment['enrolled_at'] ?? '',
                             'credits' => [
-                                'earned' => 0,     // D1 stub — will come from credential engine
-                                'total' => 0,      // D1 stub — will come from course catalogue
-                                'progress' => 0.0, // D1 stub — earned/total ratio
+                                'earned' => 0,     // Stub — will come from credential engine when integrated
+                                'total' => 0,      // Stub — will come from course catalogue when integrated
+                                'progress' => 0.0, // Stub — earned/total ratio
                             ],
                         ];
                     }
@@ -219,8 +219,8 @@ class ExperienceScreenService
      * Aggregate enrolment and completion statistics for an Experience.
      *
      * Fetches cohort data from the Enrolment Service and computes totals.
-     * Completion and credit progress are stubbed with zeros for D1 since
-     * real progress tracking depends on Team Papa's Course Service.
+     * Completion and credit progress are stubbed with zeros when using mock
+     * providers, since real progress tracking depends on Team Papa's Course Service.
      */
     public function getExperienceStatistics(Experience $experience): array
     {
@@ -247,8 +247,8 @@ class ExperienceScreenService
             // Degraded — use zeros on failure
         }
 
-        // Completion rate is a rough proxy in D1: active students / total students.
-        // In D2, this will be replaced by actual course-completion tracking from Team Papa.
+        // Completion rate is a rough proxy when using mock providers: active students / total students.
+        // This will be replaced by actual course-completion tracking from Team Papa when real services are integrated.
         $completionRate = $totalStudents > 0 ? round($activeStudents / $totalStudents, 2) : 0.0;
 
         return [
@@ -259,13 +259,13 @@ class ExperienceScreenService
                 'removed' => $removedStudents,
             ],
             'completion' => [
-                'completed' => 0,           // D1 stub — needs Course Service progress data
+                'completed' => 0,           // Stub — needs Course Service progress data when integrated
                 'in_progress' => $activeStudents,
-                'not_started' => 0,         // D1 stub — needs Course Service progress data
+                'not_started' => 0,         // Stub — needs Course Service progress data when integrated
                 'completion_rate' => $completionRate,
             ],
             'credit_progress' => [
-                'average' => 0.0,           // D1 stub — needs credential engine integration
+                'average' => 0.0,           // Stub — needs credential engine integration
                 'students_with_credits' => 0,
             ],
         ];

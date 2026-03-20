@@ -31,6 +31,7 @@ use App\Models\Experience;
 use App\Services\CohortService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * REST controller for cohort management (CRUD + state transitions).
@@ -96,6 +97,16 @@ class CohortController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        // Per Roles PDF: only School Teachers manage cohorts.
+        // School Admins can only add/remove students from cohorts.
+        if (Auth::user()->role !== 'school_teacher') {
+            return response()->json([
+                'error' => true,
+                'message' => 'Only school teachers can create cohorts',
+                'code' => 'FORBIDDEN',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'experience_id' => 'required|integer|exists:experiences,id',
             'name' => 'required|string|max:255',
@@ -148,6 +159,14 @@ class CohortController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
+        if (Auth::user()->role !== 'school_teacher') {
+            return response()->json([
+                'error' => true,
+                'message' => 'Only school teachers can update cohorts',
+                'code' => 'FORBIDDEN',
+            ], 403);
+        }
+
         $cohort = $this->cohortService->getCohort($id);
 
         if (!$cohort) {
@@ -187,6 +206,14 @@ class CohortController extends Controller
      */
     public function activate(int $id): JsonResponse
     {
+        if (Auth::user()->role !== 'school_teacher') {
+            return response()->json([
+                'error' => true,
+                'message' => 'Only school teachers can activate cohorts',
+                'code' => 'FORBIDDEN',
+            ], 403);
+        }
+
         $cohort = $this->cohortService->getCohort($id);
 
         if (!$cohort) {
@@ -217,6 +244,14 @@ class CohortController extends Controller
      */
     public function complete(int $id): JsonResponse
     {
+        if (Auth::user()->role !== 'school_teacher') {
+            return response()->json([
+                'error' => true,
+                'message' => 'Only school teachers can complete cohorts',
+                'code' => 'FORBIDDEN',
+            ], 403);
+        }
+
         $cohort = $this->cohortService->getCohort($id);
 
         if (!$cohort) {

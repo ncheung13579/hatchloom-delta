@@ -29,7 +29,7 @@
  *
  * Note: The Dashboard Service is currently read-only (all GET endpoints), so
  * this middleware won't fire for any current routes. It's included to support
- * future D2 endpoints that may accept POST/PUT/PATCH/DELETE requests.
+ * future endpoints that may accept POST/PUT/PATCH/DELETE requests.
  */
 
 declare(strict_types=1);
@@ -111,7 +111,7 @@ class AuditLogMiddleware
      * Remove sensitive fields from the request body before logging.
      *
      * This is a shallow check — it only redacts top-level keys. Nested sensitive
-     * fields (e.g., $body['user']['password']) are NOT caught. For D1 this is
+     * fields (e.g., $body['user']['password']) are NOT caught. Currently this is
      * sufficient since our API payloads are flat, but a production version should
      * do recursive sanitization.
      *

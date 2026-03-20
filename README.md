@@ -103,76 +103,18 @@ cd enrolment-service && php artisan test
 cd dashboard-service && php artisan test
 ```
 
-## API Endpoint Summary
+## API Contract
 
-All authenticated endpoints require `Authorization: Bearer {token}` header.
+**Integrating with Delta?** See [`API-CONTRACT.docx`](API-CONTRACT.docx) for full endpoint documentation, request/response shapes, authentication tokens, data ownership, and integration contracts for each team.
 
-### Dashboard Service (port 8001)
+### Quick Reference (Mock Auth Tokens)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/school/dashboard` | Aggregated school admin dashboard |
-| GET | `/api/school/dashboard/students/{id}` | Student drill-down with enrolment details |
-| GET | `/api/school/dashboard/reporting/pos-coverage` | Alberta PoS curriculum coverage report |
-| GET | `/api/school/dashboard/reporting/engagement` | Student engagement metrics |
-| GET | `/api/school/dashboard/widgets` | All dashboard widgets |
-| GET | `/api/school/dashboard/widgets/{type}` | Specific dashboard widget by type |
-| GET | `/api/school/dashboard/health` | Health check (no auth required) |
-
-### Experience Service (port 8002)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/school/experiences` | List experiences (`?search=`, `?page=`, `?per_page=`) |
-| POST | `/api/school/experiences` | Create a new experience |
-| GET | `/api/school/experiences/{id}` | Get experience detail |
-| PUT | `/api/school/experiences/{id}` | Update an experience |
-| DELETE | `/api/school/experiences/{id}` | Archive (soft-delete) an experience |
-| GET | `/api/school/experiences/{id}/students` | Enrolled students across all cohorts |
-| GET | `/api/school/experiences/{id}/students/{studentId}` | Student drill-down within experience |
-| GET | `/api/school/experiences/{id}/students/export` | Export experience students as CSV |
-| GET | `/api/school/experiences/{id}/contents` | Course contents and delivery schedule |
-| GET | `/api/school/experiences/{id}/statistics` | Per-experience statistics |
-| GET | `/api/school/experiences/health` | Health check (no auth required) |
-
-### Enrolment Service (port 8003)
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/school/cohorts` | List cohorts (`?experience_id=`, `?status=`) |
-| POST | `/api/school/cohorts` | Create a new cohort |
-| GET | `/api/school/cohorts/{id}` | Get cohort detail |
-| PUT | `/api/school/cohorts/{id}` | Update a cohort |
-| PATCH | `/api/school/cohorts/{id}/activate` | Transition cohort to active |
-| PATCH | `/api/school/cohorts/{id}/complete` | Transition cohort to completed |
-| POST | `/api/school/cohorts/{id}/enrolments` | Enrol a student in a cohort |
-| DELETE | `/api/school/cohorts/{id}/enrolments/{studentId}` | Remove a student (soft delete) |
-| GET | `/api/school/enrolments` | School-wide enrolment overview (`?search=`, `?experience_id=`, `?cohort_id=`, `?grade=`) |
-| GET | `/api/school/enrolments/students/{studentId}` | Student drill-down from enrolment context |
-| GET | `/api/school/enrolments/statistics` | Enrolment statistics with warnings |
-| GET | `/api/school/enrolments/export` | Export enrolments as CSV |
-| GET | `/api/school/enrolments/health` | Health check (no auth required) |
-
-## Authentication (Mock -- D1)
-
-All authenticated endpoints require an `Authorization: Bearer {token}` header. For D1, authentication is mocked with three hardcoded token-to-user mappings:
-
-| Token | User | Role | School |
-|-------|------|------|--------|
-| `test-admin-token` | Admin User (id=1) | school_admin | Ridgewood Academy (id=1) |
-| `test-teacher-token` | Ms. Smith (id=2) | school_teacher | Ridgewood Academy (id=1) |
-| `test-student-token` | Student 1 (id=4) | student | Ridgewood Academy (id=1) |
-| `test-parent-token` | Parent of Student 1 (id=14) | parent | Ridgewood Academy (id=1) |
-
-**Role permissions:**
-- `school_admin` and `school_teacher` — Full access to all endpoints (read + write)
-- `student` — Read-only access, scoped to own data (can view their own enrolments, experiences, dashboard; cannot create, update, or delete)
-- `parent` — Read-only access, scoped to their child's data (same as student but sees their linked child's records via `parent_of` column)
-
-Example request:
-```bash
-curl -H "Authorization: Bearer test-admin-token" http://localhost:8002/api/school/experiences
-```
+| Token | User | Role |
+|-------|------|------|
+| `test-admin-token` | Admin User (id=1) | school_admin |
+| `test-teacher-token` | Ms. Smith (id=2) | school_teacher |
+| `test-student-token` | Student 1 (id=4) | student |
+| `test-parent-token` | Parent of Student 1 (id=14) | parent |
 
 ## Environment Variables
 
@@ -203,129 +145,6 @@ GitHub Actions runs on push to `main` and on pull requests. The pipeline:
 2. Builds all Docker images via `docker compose build`
 
 See `.github/workflows/ci.yml` for details.
-
-## For Integrating Teams
-
-If you are integrating with Team Delta's services (e.g., Team Romeo, Team Papa, Team Quebec), here is everything you need to know:
-
-### Getting started
-
-```bash
-git clone <repo-url> hatchloom-delta && cd hatchloom-delta
-docker compose up --build -d
-# Wait ~15 seconds, then verify:
-curl http://localhost:8001/api/school/dashboard/health
-```
-
-That's it. Migrations and seeding happen automatically — no extra commands needed.
-
-### Authentication
-
-Use one of four bearer tokens in the `Authorization` header:
-
-```bash
-# Admin (full access)
-curl -H "Authorization: Bearer test-admin-token" http://localhost:8003/api/school/cohorts
-
-# Teacher (full access)
-curl -H "Authorization: Bearer test-teacher-token" http://localhost:8003/api/school/cohorts
-
-# Student (read-only, own data only)
-curl -H "Authorization: Bearer test-student-token" http://localhost:8003/api/school/enrolments
-
-# Parent (read-only, child's data only — parent_of links to Student 1, user_id 4)
-curl -H "Authorization: Bearer test-parent-token" http://localhost:8003/api/school/enrolments
-```
-
-Students and parents can **read** endpoints but cannot create, update, or delete resources (403 Forbidden on write attempts). Data is scoped: students see only their own records; parents see only their linked child's records.
-
-### Seeded test data
-
-All services are pre-seeded with:
-- **1 school:** Ridgewood Academy (id=1)
-- **14 users:** 1 admin (id=1), 2 teachers (id=2,3), 10 students (id=4-13), 1 parent (id=14, linked to student id=4)
-- **2 experiences:** Business Foundations, Tech Explorers (with 5 courses)
-- **3 cohorts:** Cohort A (active, 6 students), Cohort B (not_started), Cohort C (active, 2 students)
-- **5 mock courses:** IDs 1-5 (hardcoded via MockCourseDataProvider)
-- **Student grades:** 8-12 (distributed across students; Student 1 / id=4 is Grade 10)
-- **Sample credential data:** 2 earned + 1 in-progress per student (mock)
-
-### Response format
-
-All endpoints use a consistent envelope:
-
-```json
-// Success (list)
-{ "data": [...], "meta": { "current_page": 1, "last_page": 1, "per_page": 15, "total": 3 } }
-
-// Success (single resource)
-{ "id": 1, "name": "Cohort A", "status": "active", ... }
-
-// Error
-{ "error": true, "message": "Human-readable message", "code": "MACHINE_READABLE_CODE" }
-```
-
-Error codes: `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `INVALID_STATE_TRANSITION` (409), `VALIDATION_ERROR` (422).
-
-### Integration test examples
-
-The `run-integration-tests.sh` script contains 100+ working curl examples covering every endpoint, every error case, and cross-service communication. Use it as your integration specification.
-
-### Key things to know
-
-- **Tokens are forwarded:** When Dashboard Service calls Experience/Enrolment, it forwards your bearer token. One token works across the whole chain.
-- **Cohorts have a state machine:** `not_started` → `active` → `completed` (one-directional, no going back). Use PATCH for transitions.
-- **Soft deletes:** Removing a student from a cohort sets status to `removed`, not a hard delete. Archiving an experience sets `is_archived=true`.
-- **CSV exports:** Available on experience students, enrolments. Returns `text/csv` content type.
-- **Cross-service graceful degradation:** If Experience or Enrolment service is down, Dashboard returns 200 with zeroed-out data instead of failing.
-
-## Data Ownership — What Comes From Where
-
-If you are building student-facing screens (Team Romeo) or other integrations, it is important to understand which data Team Delta provides vs. what must come from other teams. **Delta owns school administration data. Delta does NOT own student activity, profile, gamification, messaging, or venture data.**
-
-### Data Delta provides (via API)
-
-| Data | Endpoint | Notes |
-|------|----------|-------|
-| Student enrolment status | `GET /api/school/enrolments` | Which cohorts/experiences a student is in, enrolled/removed status |
-| Student detail (enrolment context) | `GET /api/school/enrolments/students/{id}` | Student name, email, grade, cohort assignments, credential summary |
-| Student detail (dashboard context) | `GET /api/school/dashboard/students/{id}` | Same + credential list, curriculum mapping, course progress (all mock) |
-| Experience list | `GET /api/school/experiences` | Experience names, descriptions, course counts, cohort counts |
-| Experience detail + courses | `GET /api/school/experiences/{id}` | Course names, sequences, cohort info |
-| Experience course contents | `GET /api/school/experiences/{id}/contents` | Course block structure (titles, types). **No per-student progress.** |
-| Cohort list and detail | `GET /api/school/cohorts`, `/cohorts/{id}` | Cohort names, status, capacity, teacher, student count |
-| Enrolment statistics | `GET /api/school/enrolments/statistics` | Aggregate counts (enrolled, unassigned, warnings) |
-| Credential data (mock) | Embedded in student detail endpoints | 3 sample credentials. Placeholder until Karl's credential engine |
-| Curriculum mapping (mock) | Embedded in dashboard student drill-down | Alberta PoS coverage. Placeholder until credential engine |
-| CSV exports | `GET /enrolments/export`, `/experiences/{id}/students/export` | Downloadable enrolment and student data |
-
-### Data Delta does NOT provide (must come from other teams)
-
-| Data | Needed By | Responsible Team | Notes |
-|------|-----------|-----------------|-------|
-| User accounts, login, JWT auth | All screens | **Team Quebec** (Auth) | Delta uses mock bearer tokens. Real auth replaces `MockAuthMiddleware`. |
-| Parent-child relationships (multi-child) | Screen 400 | **Team Quebec** (Auth) | Delta has a single `parent_of` column (1 child). Multi-child requires a pivot table in Quebec's auth schema. |
-| Student profile (handle, avatar, bio, location, phone) | Screens 900, 999 | **Team Quebec** (Auth) | Delta's user model only has name/email/role/school_id/grade. Profile data is identity domain. |
-| Course catalogue and course content | Screens 999, 901 | **Team Papa** (Explore) | Delta has a `MockCourseDataProvider` with 5 stub courses. Real course names, descriptions, and content blocks come from Papa. |
-| Per-student course progress (block completion, % done) | Screens 999, 400, 901 | **Team Papa** (Explore) | Delta has no progress tracking. Papa's course service must track which blocks each student has completed. |
-| Credential engine (real credentials, not mocks) | Screens 901, 400 | **Karl** (Role B) | Delta uses `MockCredentialDataProvider`. Real credential names, dates, and curriculum alignment come from Karl's engine. |
-| Curriculum mapping (real PoS alignment) | Screens 901, 400 | **Karl** (Role B) | Delta returns mock Alberta PoS data. Real mappings require Karl's credential-to-curriculum logic. |
-| Gamification (streaks, XP, badges, skill radar) | Screens 999, 900 | **TBD** (not assigned) | No team currently owns gamification data. Likely Quebec or a new service. |
-| Ventures / LaunchPad data | Screens 999, 901, 400 | **Team Quebec** (LaunchPad) | Delta has zero venture endpoints. Sandbox and SideHustle data is Quebec's domain. |
-| Messaging and notifications | Screens 999, 400 | **Team Quebec** (ConnectHub) | Delta has no messaging system. Teacher notes, unread counts, and alerts come from ConnectHub. |
-| Calendar / upcoming events | Screen 400 | **TBD** | No team currently owns event scheduling. Could be Papa (course deadlines) or a shared service. |
-| COPPA consent status | Screen 400 | **Team Quebec** (Auth) | Parental consent tracking is part of user account management. |
-| Showcase / portfolio items | Screen 901 | **TBD** | Student work submissions for the credential wallet. Could be Papa or a dedicated portfolio service. |
-
-### Mock data providers (Strategy pattern — ready for swap)
-
-Delta uses the Strategy pattern for all external dependencies. When real services are available, swap the binding in `AppServiceProvider` — no controller or service code changes needed:
-
-| Interface | Current Mock | Swap To | Service |
-|-----------|-------------|---------|---------|
-| `CourseDataProviderInterface` | `MockCourseDataProvider` (5 courses) | Real HTTP client to Papa's API | Experience |
-| `CredentialDataProviderInterface` | `MockCredentialDataProvider` (3 sample credentials) | Real HTTP client to Karl's engine | Enrolment, Dashboard |
-| `StudentProgressProviderInterface` | `MockStudentProgressProvider` (random metrics) | Real aggregation from Papa + Karl | Dashboard |
 
 ## Known Limitations (D1)
 

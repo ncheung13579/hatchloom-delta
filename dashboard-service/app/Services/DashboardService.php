@@ -51,8 +51,8 @@ class DashboardService
     /**
      * All three dependencies are injected by Laravel's service container.
      *
-     * - $credentialProvider: Resolves to MockCredentialDataProvider in D1 (Strategy pattern)
-     * - $progressProvider: Resolves to MockStudentProgressProvider in D1 (Strategy pattern)
+     * - $credentialProvider: Currently resolves to MockCredentialDataProvider (Strategy pattern)
+     * - $progressProvider: Currently resolves to MockStudentProgressProvider (Strategy pattern)
      * - $widgetFactory: Singleton instance that maps type strings to widget classes
      */
     public function __construct(
@@ -249,15 +249,15 @@ class DashboardService
                 'email' => $student->email,
             ],
             'enrolments' => $enrolments,
-            // Progress values are hardcoded placeholders for D1.
-            // In D2, these will come from Team Papa's Course Service.
+            // Progress values are hardcoded placeholders when using mock providers.
+            // When real services are integrated, these will come from Team Papa's Course Service.
             'progress' => [
                 'courses_completed' => 1,
                 'courses_in_progress' => 2,
                 'overall_completion' => 0.35,
             ],
             // Credentials and curriculum mapping come from the injected provider
-            // (MockCredentialDataProvider in D1, Karl's credential engine post-D1)
+            // (MockCredentialDataProvider currently, Karl's credential engine when real services are integrated)
             'credentials' => $this->credentialProvider->getStudentCredentials($studentId),
             'curriculum_mapping' => $this->credentialProvider->getStudentCurriculumMapping($studentId),
         ];
@@ -281,7 +281,11 @@ class DashboardService
             ->where('role', 'student')
             ->get();
 
-        $progressData = $this->progressProvider->getPosCoverage($students);
+        // Convert Eloquent models to plain arrays so the progress provider
+        // interface stays framework-agnostic — external teams (Papa, Karl) can
+        // implement it without importing Delta's model layer.
+        $studentData = $students->map(fn(User $s) => ['id' => $s->id, 'name' => $s->name])->values()->toArray();
+        $progressData = $this->progressProvider->getPosCoverage($studentData);
 
         return [
             'school_id' => $user->school_id,
@@ -305,7 +309,8 @@ class DashboardService
             ->where('role', 'student')
             ->get();
 
-        $engagementData = $this->progressProvider->getEngagementRates($students);
+        $studentData = $students->map(fn(User $s) => ['id' => $s->id, 'name' => $s->name])->values()->toArray();
+        $engagementData = $this->progressProvider->getEngagementRates($studentData);
 
         return [
             'school_id' => $user->school_id,
@@ -396,7 +401,7 @@ class DashboardService
      * Fetch experience data from the Experience Service (port 8002).
      *
      * Calls GET /api/school/experiences on the Experience Service.
-     * Expected response: { "data": [ { "id": 1, "title": "...", ... }, ... ] }
+     * Expected response: { "data": [ { "id": 1, "name": "...", ... }, ... ] }
      * On failure: returns an empty array (graceful degradation).
      *
      * This is a shared helper used by buildWidget() so multiple widgets can

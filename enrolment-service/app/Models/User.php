@@ -27,13 +27,29 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
+/**
+ * A person in the Hatchloom platform (admin, teacher, student, or parent).
+ *
+ * Read-only reference model -- user management is owned by Team Quebec's Auth
+ * service. Extends Authenticatable (not plain Model) because MockAuthMiddleware
+ * uses Auth::login() which requires the Authenticatable contract.
+ *
+ * Roles relevant to the Enrolment Service:
+ *  - school_admin:   manages cohorts and enrolments for their school
+ *  - school_teacher: manages cohorts; can be assigned as a cohort teacher
+ *  - student:        can be enrolled into cohorts; read-only access to own data
+ *  - parent:         read-only access to their child's enrolment data
+ *
+ * @see \App\Http\Middleware\MockAuthMiddleware  Where Auth::login() is called
+ * @see \App\Models\Scopes\SchoolScope          Uses school_id for tenant isolation
+ */
 class User extends Authenticatable
 {
     /**
      * Mass-assignable attributes.
      *
      * Includes 'grade' which is seeded for students but not yet used in filtering
-     * (planned for D2 when the enrolment overview supports grade-based filtering).
+     * (grade-based filtering for the enrolment overview is planned).
      */
     protected $fillable = ['name', 'email', 'password', 'role', 'school_id', 'grade', 'parent_of'];
 

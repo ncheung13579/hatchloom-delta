@@ -9,11 +9,11 @@
  *   this interface (not a concrete class), allowing the implementation to
  *   be swapped without changing any service or controller code.
  *
- * Current binding (D1):
+ * Current binding (mock):
  *   AppServiceProvider binds this to MockCredentialDataProvider, which
  *   returns hardcoded sample credentials and curriculum mappings.
  *
- * Future binding (post-D1):
+ * Future binding (when real services are integrated):
  *   When Karl (Role B / Riipen lead) delivers the credential engine, a
  *   real implementation will query the `credentials` and `curriculum_mappings`
  *   tables. The only change needed is updating the binding in AppServiceProvider.
@@ -23,7 +23,7 @@
  *     curriculum mapping for the student detail view
  *   - Widget context — passed to widgets that need credential data
  *
- * @see \App\Services\MockCredentialDataProvider  Current D1 implementation
+ * @see \App\Services\MockCredentialDataProvider  Current mock implementation
  * @see \App\Providers\AppServiceProvider          Where the binding is configured
  */
 

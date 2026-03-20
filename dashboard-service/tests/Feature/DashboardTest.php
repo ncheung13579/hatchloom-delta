@@ -151,11 +151,36 @@ class DashboardTest extends TestCase
             ]);
     }
 
-    public function test_student_role_can_read_dashboard(): void
+    public function test_student_role_cannot_read_school_wide_dashboard(): void
     {
         // Student user (ID 4) already created in setUp via auto-increment.
-        // All dashboard endpoints are read-only, so students have access.
+        // School-wide dashboard endpoints are admin/teacher only — students
+        // must not see aggregated data for all students in the school.
         $response = $this->getJson('/api/school/dashboard', [
+            'Authorization' => 'Bearer test-student-token',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_student_can_read_own_drill_down(): void
+    {
+        $studentId = $this->student->id;
+
+        Http::fake([
+            "*/api/school/enrolments/students/{$studentId}" => Http::response([
+                'student' => [
+                    'id' => $studentId,
+                    'name' => 'Student 1',
+                    'email' => 'student1@ridgewood.edu',
+                    'grade' => null,
+                ],
+                'enrolments' => [],
+                'credentials' => [],
+            ]),
+        ]);
+
+        $response = $this->getJson("/api/school/dashboard/students/{$studentId}", [
             'Authorization' => 'Bearer test-student-token',
         ]);
 

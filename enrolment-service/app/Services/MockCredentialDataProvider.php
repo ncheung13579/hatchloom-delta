@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 /**
- * MockCredentialDataProvider — D1 stub for the Strategy pattern credential provider.
+ * MockCredentialDataProvider — Mock stub for the Strategy pattern credential provider.
  *
- * This is the concrete implementation of CredentialDataProviderInterface for the
- * first deliverable (D1). It returns zeroed-out credential summaries because Karl's
+ * This is the mock implementation of CredentialDataProviderInterface. It returns
+ * placeholder credential summaries because Karl's
  * credential engine (Role B) is not yet available.
  *
  * HOW THE STRATEGY PATTERN WORKS HERE:
@@ -33,7 +33,7 @@ namespace App\Services;
 use App\Contracts\CredentialDataProviderInterface;
 
 /**
- * Mock credential data for D1 testing in the Enrolment Service.
+ * Mock credential data for development/testing in the Enrolment Service.
  *
  * Returns empty credential summaries. When Karl's credential engine is
  * available, replace this binding in AppServiceProvider with a real

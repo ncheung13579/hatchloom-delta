@@ -9,7 +9,7 @@ declare(strict_types=1);
  * bindings. It is the key configuration point for the Strategy pattern used in this service.
  *
  * STRATEGY PATTERN BINDING:
- * The only binding in D1 is CredentialDataProviderInterface -> MockCredentialDataProvider.
+ * The current binding is CredentialDataProviderInterface -> MockCredentialDataProvider.
  * This means whenever any class (currently EnrolmentService) asks for
  * CredentialDataProviderInterface via constructor injection, Laravel's container will
  * automatically provide an instance of MockCredentialDataProvider.
@@ -28,7 +28,7 @@ declare(strict_types=1);
  * provider holds a database connection, singleton() might be more appropriate.
  *
  * @see \App\Contracts\CredentialDataProviderInterface  The Strategy pattern interface
- * @see \App\Services\MockCredentialDataProvider        The D1 mock implementation
+ * @see \App\Services\MockCredentialDataProvider        The current mock implementation
  * @see \App\Services\EnrolmentService                  The consumer that depends on the interface
  */
 
@@ -43,8 +43,8 @@ class AppServiceProvider extends ServiceProvider
     /**
      * Register any application services.
      *
-     * Binds the CredentialDataProviderInterface to the mock implementation
-     * for D1. When Karl's credential engine is available, swap
+     * Binds the CredentialDataProviderInterface to the mock implementation.
+     * When Karl's credential engine is available, swap
      * MockCredentialDataProvider for the real implementation here.
      *
      * This single line is what makes the Strategy pattern work: it tells
@@ -59,8 +59,8 @@ class AppServiceProvider extends ServiceProvider
     /**
      * Bootstrap any application services.
      *
-     * Currently empty. In D2+, this could register event listeners,
-     * middleware aliases, or other boot-time configuration.
+     * Currently empty. When real services are integrated, this could register
+     * event listeners, middleware aliases, or other boot-time configuration.
      */
     public function boot(): void
     {

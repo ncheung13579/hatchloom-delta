@@ -9,11 +9,11 @@
  *   where it comes from. The implementation can be swapped via the DI binding
  *   in AppServiceProvider.
  *
- * Current binding (D1):
+ * Current binding (mock):
  *   AppServiceProvider binds this to MockStudentProgressProvider, which
  *   returns deterministic or randomized sample data.
  *
- * Future binding (post-D1):
+ * Future binding (when real services are integrated):
  *   A real implementation will derive metrics from:
  *   - Team Papa's Course Service (course completion, challenge progress)
  *   - Karl's credential engine (credit progress, PoS coverage)
@@ -26,16 +26,13 @@
  *   - CohortSummaryWidget — cohort statistics section
  *   - EngagementChartWidget — engagement chart section
  *
- * @see \App\Services\MockStudentProgressProvider  Current D1 implementation
+ * @see \App\Services\MockStudentProgressProvider  Current mock implementation
  * @see \App\Providers\AppServiceProvider           Where the binding is configured
  */
 
 declare(strict_types=1);
 
 namespace App\Contracts;
-
-use App\Models\User;
-use Illuminate\Support\Collection;
 
 interface StudentProgressProviderInterface
 {
@@ -80,10 +77,14 @@ interface StudentProgressProviderInterface
      * Business Studies, CTF Design Studies, and CALM. Used by the
      * /reporting/pos-coverage endpoint (R3 requirement).
      *
-     * @param  Collection<int, User> $students  Students in the school
+     * Accepts an array of student descriptors (not Eloquent models) so that
+     * external services (Team Papa, Karl) can implement this interface without
+     * importing Delta's model layer.
+     *
+     * @param  array<int, array{id: int, name: string}> $students  Student ID/name pairs
      * @return array{student_coverage: array, school_averages: array}
      */
-    public function getPosCoverage(Collection $students): array;
+    public function getPosCoverage(array $students): array;
 
     /**
      * Build per-student engagement metrics.
@@ -92,8 +93,12 @@ interface StudentProgressProviderInterface
      * timestamps per student, plus school-wide averages. Used by the
      * /reporting/engagement endpoint (R3 requirement) and EngagementChartWidget.
      *
-     * @param  Collection<int, User> $students  Students in the school
+     * Accepts an array of student descriptors (not Eloquent models) so that
+     * external services can implement this interface via HTTP without needing
+     * access to Delta's database or model classes.
+     *
+     * @param  array<int, array{id: int, name: string}> $students  Student ID/name pairs
      * @return array{student_engagement: array, school_averages: array}
      */
-    public function getEngagementRates(Collection $students): array;
+    public function getEngagementRates(array $students): array;
 }

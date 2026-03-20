@@ -15,12 +15,12 @@ declare(strict_types=1);
  * enrolment action — EnrolmentService does not know or care that teachers are
  * being notified.
  *
- * D1 BEHAVIOR (current):
+ * CURRENT BEHAVIOR (mock):
  *   Logs a structured notification message with teacher identity, student
  *   identity, cohort details, and the action (enrolled/removed). This simulates
  *   the real notification payload and verifies the Observer wiring.
  *
- * D2+ BEHAVIOR (planned):
+ * WHEN REAL SERVICES ARE INTEGRATED:
  *   Would dispatch a Laravel Notification (email, in-app, or push) to the
  *   teacher user. Could also be made async via ShouldQueue to avoid blocking
  *   the HTTP response.
@@ -45,7 +45,7 @@ use Illuminate\Support\Facades\Log;
  * Listens to enrolment and removal events to notify the cohort's teacher.
  *
  * In production, this would dispatch a notification (email, in-app, or push)
- * to the teacher assigned to the cohort. For D1, it logs a structured
+ * to the teacher assigned to the cohort. Currently, it logs a structured
  * notification message that includes the teacher's identity and the student
  * action, simulating what the real notification payload would contain.
  */

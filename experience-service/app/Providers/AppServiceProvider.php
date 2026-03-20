@@ -25,7 +25,7 @@
  *   All controllers and services will automatically receive the new implementation.
  *
  * @see \App\Contracts\CourseDataProviderInterface  The interface being bound
- * @see \App\Services\MockCourseDataProvider        The current D1 concrete implementation
+ * @see \App\Services\MockCourseDataProvider        The current mock implementation
  */
 
 declare(strict_types=1);

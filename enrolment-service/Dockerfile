@@ -13,8 +13,6 @@ RUN composer install --no-dev --optimize-autoloader --no-scripts
 COPY . .
 RUN composer dump-autoload --optimize
 
-RUN php artisan key:generate --force || true
-
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 

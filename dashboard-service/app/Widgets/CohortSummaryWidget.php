@@ -88,7 +88,7 @@ class CohortSummaryWidget implements DashboardWidget
             ],
             'statistics' => [
                 'enrolment_rate' => $totalStudents > 0 ? round($totalEnrolled / $totalStudents, 2) : 0,
-                // These delegate to the Strategy provider (mock in D1, real in D2+)
+                // These delegate to the Strategy provider (mock currently, real when services are integrated)
                 'credit_progress' => $this->progressProvider->calculateCreditProgress($this->experiences),
                 'timely_completion' => $this->progressProvider->calculateTimelyCompletion($totalEnrolled, $assigned),
                 'problems_tackled' => $this->progressProvider->countProblemsTackled($this->experiences),

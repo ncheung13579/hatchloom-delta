@@ -49,22 +49,28 @@ Route::prefix('school')->group(function () {
         'timestamp' => now()->toIso8601String(),
     ]));
 
-    // All routes inside this group require a valid bearer token (mock auth for D1).
+    // All routes inside this group require a valid bearer token (mock auth for development).
     // The middleware alias 'mock.auth' is registered in the application's kernel/bootstrap.
-    // Read-only endpoints — accessible by admins, teachers, AND students.
+
+    // Read-only endpoints — accessible by admins, teachers, students, and parents.
+    // Students see experience list, detail, contents, and their own student detail.
+    // These MUST be registered before the write endpoints to prevent the {id} wildcard
+    // from swallowing path segments like "students" or "contents" as an experience ID.
     Route::middleware('mock.auth:student,parent')->group(function () {
-        // --- Screen 302 sub-resource routes (read-only) ---
-        // These MUST be registered before apiResource to prevent the {id} wildcard
-        // from swallowing path segments like "students" or "contents" as an experience ID.
-        Route::get('experiences/{id}/students/export', [ExperienceScreenController::class, 'exportStudents'])->where('id', '[0-9]+');
         Route::get('experiences/{id}/students/{studentId}', [ExperienceScreenController::class, 'studentDetail'])->where(['id' => '[0-9]+', 'studentId' => '[0-9]+']);
         Route::get('experiences/{id}/students', [ExperienceScreenController::class, 'students'])->where('id', '[0-9]+');
         Route::get('experiences/{id}/contents', [ExperienceScreenController::class, 'contents'])->where('id', '[0-9]+');
-        Route::get('experiences/{id}/statistics', [ExperienceScreenController::class, 'statistics'])->where('id', '[0-9]+');
 
         // Screen 301 read-only routes (list + detail)
         Route::get('experiences', [ExperienceController::class, 'index']);
         Route::get('experiences/{id}', [ExperienceController::class, 'show'])->where('id', '[0-9]+');
+    });
+
+    // Admin/teacher-only read endpoints — school-wide statistics and CSV exports.
+    // Students must not access school-wide aggregation or bulk data downloads.
+    Route::middleware('mock.auth')->group(function () {
+        Route::get('experiences/{id}/students/export', [ExperienceScreenController::class, 'exportStudents'])->where('id', '[0-9]+');
+        Route::get('experiences/{id}/statistics', [ExperienceScreenController::class, 'statistics'])->where('id', '[0-9]+');
     });
 
     // Write endpoints — admin and teacher only (no student access).

@@ -18,11 +18,11 @@ declare(strict_types=1);
  *
  * HOW IT FITS IN:
  *  - EnrolmentService depends on this interface (constructor injection)
- *  - AppServiceProvider binds the interface to MockCredentialDataProvider for D1
+ *  - AppServiceProvider binds the interface to MockCredentialDataProvider currently
  *  - The studentDetail() endpoint in EnrolmentController surfaces credential data
  *    to the admin's drill-down view on Screen 303
  *
- * @see \App\Services\MockCredentialDataProvider  D1 mock implementation
+ * @see \App\Services\MockCredentialDataProvider  Mock implementation (current)
  * @see \App\Services\EnrolmentService            Consumer of this interface
  * @see \App\Providers\AppServiceProvider          Where the binding is configured
  */
@@ -32,7 +32,7 @@ namespace App\Contracts;
 /**
  * Contract for accessing student credential data in the Enrolment Service.
  *
- * In D1, fulfilled by MockCredentialDataProvider with empty/zero data.
+ * Currently fulfilled by MockCredentialDataProvider with placeholder data.
  * When Karl's credential engine is available, a real implementation will
  * query the credentials tables and return actual earned/in-progress counts.
  */
@@ -45,7 +45,7 @@ interface CredentialDataProviderInterface
      *   [
      *       'total_earned' => int,    // Number of credentials the student has earned
      *       'in_progress'  => int,    // Number of credentials in progress
-     *       'details'      => array,  // Detailed credential records (empty in D1)
+     *       'details'      => array,  // Detailed credential records (placeholder data with mock provider)
      *   ]
      *
      * @param  int   $studentId The student's user ID

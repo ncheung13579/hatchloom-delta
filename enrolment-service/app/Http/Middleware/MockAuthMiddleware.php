@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 /**
- * MockAuthMiddleware — D1 mock authentication for the Enrolment Service.
+ * MockAuthMiddleware — Mock authentication for the Enrolment Service.
  *
  * In the Hatchloom architecture, real authentication is owned by Team Quebec.
- * For D1, all four teams use hardcoded bearer tokens mapped to seeded User records.
+ * Currently, all four teams use hardcoded bearer tokens mapped to seeded User records.
  * This middleware intercepts every protected request, validates the token, logs
  * the user into Laravel's Auth system, and enforces role-based access control.
  *
@@ -34,14 +34,14 @@ use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * D1 mock authentication middleware.
+ * Mock authentication middleware.
  *
  * Maps hardcoded bearer tokens to seeded User records, bypassing real
- * authentication for the first deliverable. Rejects requests with missing
+ * authentication until Team Quebec's auth service is integrated. Rejects requests with missing
  * or unrecognized tokens (401) and restricts access to school_admin and
  * school_teacher roles (403). Uses the same pattern as experience-service.
  *
- * This will be replaced by Team Quebec's real auth service in a later deliverable.
+ * This will be replaced when Team Quebec's real auth service is integrated.
  */
 class MockAuthMiddleware
 {

@@ -1,7 +1,7 @@
 <?php
 
 /**
- * MockAuthMiddleware — D1 mock authentication for the Experience Service.
+ * MockAuthMiddleware — Mock authentication for the Experience Service.
  *
  * Architecture role:
  *   This middleware sits at the front of the request lifecycle for all protected
@@ -13,10 +13,10 @@
  *     4. Enforce role-based access (only school_admin and school_teacher may proceed)
  *
  * Why mock auth?
- *   Real authentication is owned by Team Quebec. For D1, all four teams agreed on a
- *   shared mock: hardcoded tokens map to seeded users. This lets us develop and test
- *   all endpoints without waiting for Quebec's auth service. The middleware will be
- *   swapped for a real JWT/OAuth integration in a later deliverable.
+ *   Real authentication is owned by Team Quebec. During development, all four teams
+ *   agreed on a shared mock: hardcoded tokens map to seeded users. This lets us develop
+ *   and test all endpoints without waiting for Quebec's auth service. The middleware
+ *   will be swapped for a real JWT/OAuth integration when real services are integrated.
  *
  * Request lifecycle position:
  *   HTTP Request -> MockAuthMiddleware -> AuditLogMiddleware -> Controller -> Response
@@ -43,7 +43,7 @@ use Symfony\Component\HttpFoundation\Response;
 class MockAuthMiddleware
 {
     /**
-     * Hardcoded token-to-user-ID mapping for D1.
+     * Hardcoded token-to-user-ID mapping for development.
      *
      * These user IDs correspond to records seeded by the database seeder:
      *   - ID 1: School admin (school_id=1, role=school_admin)

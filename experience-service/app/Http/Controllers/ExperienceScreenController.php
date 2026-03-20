@@ -157,9 +157,9 @@ class ExperienceScreenController extends Controller
     /**
      * GET /api/school/experiences/{id}/contents — Get course contents and block structure.
      *
-     * Returns each course in the Experience with its internal block structure (lessons,
-     * challenges). Block data comes from the CourseDataProviderInterface — currently
-     * mock data, but will be real upstream data from Team Papa's Course Service in D2.
+     * Returns each course in the Experience with its internal block structure.
+     * Block data comes from the CourseDataProviderInterface — currently
+     * mock data, but will be real upstream data from Team Papa's Course Service when real services are integrated.
      */
     public function contents(int $id): JsonResponse
     {
@@ -181,8 +181,8 @@ class ExperienceScreenController extends Controller
      *
      * Returns total/active/removed student counts, completion rates, and credit progress.
      * Student counts come from the Enrolment Service; completion and credit data are
-     * stubbed with zeros in D1 because real progress tracking depends on Team Papa's
-     * Course Service integration (planned for D2).
+     * stubbed with zeros because real progress tracking depends on Team Papa's
+     * Course Service integration (will be available when real services are integrated).
      */
     public function statistics(int $id): JsonResponse
     {

@@ -8,17 +8,17 @@
  * with their concrete implementations and registers factory singletons.
  *
  * Why this file matters:
- *   When transitioning from D1 (mock data) to D2 (real integrations), this is
- *   the ONLY file that needs to change to swap implementations. All service and
- *   controller code depends on interfaces, not concrete classes, so swapping
- *   a mock for a real implementation is a one-line change here.
+ *   When transitioning from mock data to real integrations, this is the ONLY
+ *   file that needs to change to swap implementations. All service and controller
+ *   code depends on interfaces, not concrete classes, so swapping a mock for a
+ *   real implementation is a one-line change here.
  *
- * Current bindings (D1 — mock data):
+ * Current bindings (mock data):
  *   CredentialDataProviderInterface  -> MockCredentialDataProvider
  *   StudentProgressProviderInterface -> MockStudentProgressProvider
  *   DashboardWidgetFactory           -> singleton (stateless, reusable)
  *
- * Future bindings (D2 — real integrations):
+ * Future bindings (real integrations):
  *   CredentialDataProviderInterface  -> CredentialDataProvider (queries Karl's tables)
  *   StudentProgressProviderInterface -> StudentProgressProvider (queries Course Service + activity logs)
  *   DashboardWidgetFactory           -> singleton (no change needed)
@@ -56,12 +56,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Strategy binding: credential data (mock for D1)
-        // Swap to real implementation when Karl's credential engine is ready
+        // Strategy binding: credential data (mock — swap to real in AppServiceProvider)
+        // Replace with real implementation when Karl's credential engine is ready
         $this->app->bind(CredentialDataProviderInterface::class, MockCredentialDataProvider::class);
 
-        // Strategy binding: student progress metrics (mock for D1)
-        // Swap to real implementation when Team Papa's Course Service is integrated
+        // Strategy binding: student progress metrics (mock — swap to real in AppServiceProvider)
+        // Replace with real implementation when Team Papa's Course Service is integrated
         $this->app->bind(StudentProgressProviderInterface::class, MockStudentProgressProvider::class);
 
         // Widget factory: singleton because it's stateless — the WIDGET_MAP constant
@@ -73,7 +73,7 @@ class AppServiceProvider extends ServiceProvider
      * Bootstrap any application services.
      *
      * Currently empty. This is where you'd register event listeners, observers,
-     * global scopes, or other boot-time configuration for D2.
+     * global scopes, or other boot-time configuration when real services are integrated.
      */
     public function boot(): void
     {

@@ -16,6 +16,7 @@ class CohortTest extends TestCase
     use DatabaseMigrations;
 
     private User $admin;
+    private User $teacher;
     private School $school;
     private Experience $experience;
 
@@ -37,18 +38,31 @@ class CohortTest extends TestCase
             'school_id' => $this->school->id,
         ]); // auto-increment ID 1 → matches TOKEN_MAP 'test-admin-token'
 
+        $this->teacher = User::create([
+            'name' => 'Ms. Smith',
+            'email' => 'teacher@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'school_teacher',
+            'school_id' => $this->school->id,
+        ]); // auto-increment ID 2 → matches TOKEN_MAP 'test-teacher-token'
+
         $this->experience = Experience::create([
             'school_id' => $this->school->id,
             'name' => 'Business Foundations',
             'description' => 'Test experience',
             'status' => 'active',
-            'created_by' => $this->admin->id,
+            'created_by' => $this->teacher->id,
         ]);
     }
 
     private function authHeaders(): array
     {
         return ['Authorization' => 'Bearer test-admin-token'];
+    }
+
+    private function teacherAuthHeaders(): array
+    {
+        return ['Authorization' => 'Bearer test-teacher-token'];
     }
 
     public function test_can_list_cohorts(): void
@@ -77,7 +91,7 @@ class CohortTest extends TestCase
             'start_date' => '2026-04-01',
             'end_date' => '2026-08-01',
             'capacity' => 30,
-        ], $this->authHeaders());
+        ], $this->teacherAuthHeaders());
 
         $response->assertStatus(201)
             ->assertJsonFragment(['name' => 'New Cohort', 'status' => 'not_started']);
@@ -94,7 +108,7 @@ class CohortTest extends TestCase
             'end_date' => '2026-06-01',
         ]);
 
-        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/activate", [], $this->authHeaders());
+        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/activate", [], $this->teacherAuthHeaders());
 
         $response->assertStatus(200)
             ->assertJsonFragment(['status' => 'active']);
@@ -111,7 +125,7 @@ class CohortTest extends TestCase
             'end_date' => '2026-06-01',
         ]);
 
-        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/activate", [], $this->authHeaders());
+        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/activate", [], $this->teacherAuthHeaders());
 
         $response->assertStatus(409);
     }
@@ -127,7 +141,7 @@ class CohortTest extends TestCase
             'end_date' => '2026-06-01',
         ]);
 
-        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/complete", [], $this->authHeaders());
+        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/complete", [], $this->teacherAuthHeaders());
 
         $response->assertStatus(200)
             ->assertJsonFragment(['status' => 'completed']);
@@ -144,7 +158,7 @@ class CohortTest extends TestCase
             'end_date' => '2026-08-01',
         ]);
 
-        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/complete", [], $this->authHeaders());
+        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/complete", [], $this->teacherAuthHeaders());
 
         $response->assertStatus(409);
     }
@@ -154,7 +168,7 @@ class CohortTest extends TestCase
         $response = $this->postJson('/api/school/cohorts', [
             'name' => 'Incomplete Cohort',
             // Missing experience_id, start_date, end_date
-        ], $this->authHeaders());
+        ], $this->teacherAuthHeaders());
 
         $response->assertStatus(422);
     }
@@ -174,7 +188,7 @@ class CohortTest extends TestCase
         $response = $this->putJson("/api/school/cohorts/{$cohort->id}", [
             'name' => 'Renamed Cohort',
             'capacity' => 35,
-        ], $this->authHeaders());
+        ], $this->teacherAuthHeaders());
 
         $response->assertStatus(200)
             ->assertJsonFragment([
@@ -284,9 +298,8 @@ class CohortTest extends TestCase
 
     public function test_student_role_can_read_cohorts(): void
     {
-        // Create filler users so auto-increment reaches ID 4
-        // (setUp already created admin as ID 1)
-        User::create(['name' => 'Teacher', 'email' => 'teacher@ridgewood.edu', 'password' => bcrypt('password'), 'role' => 'school_teacher', 'school_id' => $this->school->id]);
+        // Create filler user so auto-increment reaches ID 4
+        // (setUp already created admin as ID 1, teacher as ID 2)
         User::create(['name' => 'Filler', 'email' => 'filler@ridgewood.edu', 'password' => bcrypt('password'), 'role' => 'school_teacher', 'school_id' => $this->school->id]);
         $student = User::create([
             'name' => 'Student 1',
@@ -306,8 +319,8 @@ class CohortTest extends TestCase
 
     public function test_student_role_cannot_create_cohort(): void
     {
-        // Create filler users so auto-increment reaches ID 4
-        User::create(['name' => 'Teacher', 'email' => 'teacher@ridgewood.edu', 'password' => bcrypt('password'), 'role' => 'school_teacher', 'school_id' => $this->school->id]);
+        // Create filler user so auto-increment reaches ID 4
+        // (setUp already created admin as ID 1, teacher as ID 2)
         User::create(['name' => 'Filler', 'email' => 'filler@ridgewood.edu', 'password' => bcrypt('password'), 'role' => 'school_teacher', 'school_id' => $this->school->id]);
         $student = User::create([
             'name' => 'Student 1',
@@ -343,7 +356,7 @@ class CohortTest extends TestCase
             'name' => 'Bad Dates Cohort',
             'start_date' => '2026-08-01',
             'end_date' => '2026-04-01',
-        ], $this->authHeaders());
+        ], $this->teacherAuthHeaders());
 
         $response->assertStatus(422);
     }
@@ -355,7 +368,7 @@ class CohortTest extends TestCase
             'name' => str_repeat('X', 256),
             'start_date' => '2026-04-01',
             'end_date' => '2026-08-01',
-        ], $this->authHeaders());
+        ], $this->teacherAuthHeaders());
 
         $response->assertStatus(422);
     }
@@ -368,7 +381,7 @@ class CohortTest extends TestCase
             'start_date' => '2026-04-01',
             'end_date' => '2026-08-01',
             'capacity' => 0,
-        ], $this->authHeaders());
+        ], $this->teacherAuthHeaders());
 
         $response->assertStatus(422);
     }
@@ -380,7 +393,7 @@ class CohortTest extends TestCase
             'name' => 'Ghost Experience Cohort',
             'start_date' => '2026-04-01',
             'end_date' => '2026-08-01',
-        ], $this->authHeaders());
+        ], $this->teacherAuthHeaders());
 
         $response->assertStatus(422);
     }
@@ -395,7 +408,7 @@ class CohortTest extends TestCase
             'start_date' => '2026-04-01',
             'end_date' => '2026-08-01',
             'capacity' => 40,
-        ], $this->authHeaders());
+        ], $this->teacherAuthHeaders());
 
         $response->assertStatus(201);
         $data = $response->json();
@@ -442,7 +455,7 @@ class CohortTest extends TestCase
             'end_date' => '2026-03-01',
         ]);
 
-        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/activate", [], $this->authHeaders());
+        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/activate", [], $this->teacherAuthHeaders());
 
         $response->assertStatus(409)
             ->assertJsonStructure(['error', 'message', 'code'])
@@ -460,7 +473,7 @@ class CohortTest extends TestCase
             'end_date' => '2026-06-01',
         ]);
 
-        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/activate", [], $this->authHeaders());
+        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/activate", [], $this->teacherAuthHeaders());
 
         $response->assertStatus(409);
     }
@@ -485,9 +498,77 @@ class CohortTest extends TestCase
             'end_date' => '2026-03-01',
         ]);
 
-        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/complete", [], $this->authHeaders());
+        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/complete", [], $this->teacherAuthHeaders());
         $response->assertStatus(409)
             ->assertJsonStructure(['error', 'message', 'code'])
             ->assertJson(['error' => true, 'code' => 'INVALID_STATE_TRANSITION']);
+    }
+
+    // ── School Admin permission restriction ────────────────────
+
+    public function test_school_admin_cannot_create_cohort(): void
+    {
+        $response = $this->postJson('/api/school/cohorts', [
+            'experience_id' => $this->experience->id,
+            'name' => 'Admin Attempt',
+            'start_date' => '2026-04-01',
+            'end_date' => '2026-08-01',
+        ], $this->authHeaders());
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    public function test_school_admin_cannot_update_cohort(): void
+    {
+        $cohort = Cohort::create([
+            'experience_id' => $this->experience->id,
+            'school_id' => $this->school->id,
+            'name' => 'Test Cohort',
+            'status' => 'not_started',
+            'start_date' => '2026-04-01',
+            'end_date' => '2026-08-01',
+        ]);
+
+        $response = $this->putJson("/api/school/cohorts/{$cohort->id}", [
+            'name' => 'Admin Rename Attempt',
+        ], $this->authHeaders());
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    public function test_school_admin_cannot_activate_cohort(): void
+    {
+        $cohort = Cohort::create([
+            'experience_id' => $this->experience->id,
+            'school_id' => $this->school->id,
+            'name' => 'Test Cohort',
+            'status' => 'not_started',
+            'start_date' => '2026-04-01',
+            'end_date' => '2026-08-01',
+        ]);
+
+        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/activate", [], $this->authHeaders());
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    public function test_school_admin_cannot_complete_cohort(): void
+    {
+        $cohort = Cohort::create([
+            'experience_id' => $this->experience->id,
+            'school_id' => $this->school->id,
+            'name' => 'Test Cohort',
+            'status' => 'active',
+            'start_date' => '2026-04-01',
+            'end_date' => '2026-08-01',
+        ]);
+
+        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/complete", [], $this->authHeaders());
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
     }
 }

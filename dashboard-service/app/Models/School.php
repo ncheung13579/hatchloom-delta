@@ -19,7 +19,7 @@
  * Relationships:
  *   School 1--* User (admins, teachers, students all belong to one school)
  *
- * Seeded data (D1):
+ * Seeded data (development):
  *   ID 1: "Hatchloom Demo School" (code: DEMO, is_active: true)
  */
 

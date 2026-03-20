@@ -1,20 +1,20 @@
 <?php
 
 /**
- * MockCourseDataProvider — D1 mock implementation of the Strategy pattern for course data.
+ * MockCourseDataProvider — Mock implementation of the Strategy pattern for course data.
  *
  * Architecture role:
- *   This is the concrete strategy for CourseDataProviderInterface during D1 development.
+ *   This is the concrete strategy for CourseDataProviderInterface during development.
  *   It provides a static, in-memory catalogue of 5 fake courses so that the Experience
  *   Service can:
  *     - Validate course IDs when creating/updating Experiences
  *     - Display course names in Experience detail views
- *     - Show course block structures (lessons/challenges) on the Contents tab
+ *     - Show course block structures on the Contents tab
  *   ...all without needing Team Papa's Course Service to be running.
  *
  * Strategy pattern (SDD Section 6.4):
  *   - Interface: CourseDataProviderInterface
- *   - This class: MockCourseDataProvider (D1 concrete strategy)
+ *   - This class: MockCourseDataProvider (development implementation)
  *   - Future replacement: HttpCourseDataProvider (makes real HTTP calls to Team Papa's API)
  *
  * How to swap to a real provider:
@@ -47,10 +47,20 @@ class MockCourseDataProvider implements CourseDataProviderInterface
      *   - id: Unique identifier (matches what Team Papa's real service would return)
      *   - name: Display name shown in Experience detail views
      *   - description: Summary text for the course
-     *   - blocks: Array of lesson/challenge items that make up the course content
+     *   - blocks: Array of content blocks that make up the course structure
      *
-     * These 5 courses are sufficient for D1 development and testing. The IDs (1-5)
-     * are used in seed data and tests, so changing them requires updating those too.
+     * Block fields match Karl's canonical schema: id, title (mapped to 'name'),
+     * sequence, status (locked/active/complete). In production, blocks will also
+     * contain nested 'nodes', which contain 'activity_cards' with card_type
+     * (10 types: watch_video, read_document, complete_quiz, answer_question,
+     * vote_poll, live_session, social_activity, explore_gallery,
+     * listen_to_podcast, submit_solution). The mock omits nodes/cards since
+     * Delta doesn't consume that level of detail yet.
+     *
+     * These 5 courses are sufficient for development and testing. Block counts
+     * vary (1, 2, 3, 4, 5) to surface rendering bugs with variable-length content.
+     * The IDs (1-5) are used in seed data and tests, so changing them requires
+     * updating those too.
      */
     private static array $courses = [
         1 => [
@@ -58,8 +68,9 @@ class MockCourseDataProvider implements CourseDataProviderInterface
             'name' => 'Intro to Entrepreneurship',
             'description' => 'Learn the basics of starting and running a business.',
             'blocks' => [
-                ['id' => 101, 'title' => 'What is a Business?', 'type' => 'lesson'],
-                ['id' => 102, 'title' => 'Business Plan Challenge', 'type' => 'challenge'],
+                ['id' => 101, 'name' => 'What is a Business?', 'status' => 'complete'],
+                ['id' => 102, 'name' => 'Business Models', 'status' => 'active'],
+                ['id' => 103, 'name' => 'Business Plan Challenge', 'status' => 'locked'],
             ],
         ],
         2 => [
@@ -67,8 +78,10 @@ class MockCourseDataProvider implements CourseDataProviderInterface
             'name' => 'Financial Literacy',
             'description' => 'Understanding money, budgeting, and financial planning.',
             'blocks' => [
-                ['id' => 201, 'title' => 'Budgeting Basics', 'type' => 'lesson'],
-                ['id' => 202, 'title' => 'Savings Challenge', 'type' => 'challenge'],
+                ['id' => 201, 'name' => 'Budgeting Basics', 'status' => 'complete'],
+                ['id' => 202, 'name' => 'Income and Expenses', 'status' => 'complete'],
+                ['id' => 203, 'name' => 'Savings Challenge', 'status' => 'active'],
+                ['id' => 204, 'name' => 'Investment Fundamentals', 'status' => 'locked'],
             ],
         ],
         3 => [
@@ -76,8 +89,8 @@ class MockCourseDataProvider implements CourseDataProviderInterface
             'name' => 'Marketing Basics',
             'description' => 'Introduction to marketing strategies and branding.',
             'blocks' => [
-                ['id' => 301, 'title' => 'What is Marketing?', 'type' => 'lesson'],
-                ['id' => 302, 'title' => 'Brand Identity Challenge', 'type' => 'challenge'],
+                ['id' => 301, 'name' => 'What is Marketing?', 'status' => 'active'],
+                ['id' => 302, 'name' => 'Brand Identity Challenge', 'status' => 'active'],
             ],
         ],
         4 => [
@@ -85,8 +98,7 @@ class MockCourseDataProvider implements CourseDataProviderInterface
             'name' => 'Digital Skills',
             'description' => 'Building digital literacy and technical skills.',
             'blocks' => [
-                ['id' => 401, 'title' => 'Internet Safety', 'type' => 'lesson'],
-                ['id' => 402, 'title' => 'Digital Portfolio Challenge', 'type' => 'challenge'],
+                ['id' => 401, 'name' => 'Internet Safety', 'status' => 'active'],
             ],
         ],
         5 => [
@@ -94,8 +106,11 @@ class MockCourseDataProvider implements CourseDataProviderInterface
             'name' => 'Coding Fundamentals',
             'description' => 'Introduction to programming concepts and logic.',
             'blocks' => [
-                ['id' => 501, 'title' => 'Variables and Loops', 'type' => 'lesson'],
-                ['id' => 502, 'title' => 'Build a Calculator Challenge', 'type' => 'challenge'],
+                ['id' => 501, 'name' => 'Variables and Loops', 'status' => 'complete'],
+                ['id' => 502, 'name' => 'Conditionals and Functions', 'status' => 'active'],
+                ['id' => 503, 'name' => 'Build a Calculator Challenge', 'status' => 'locked'],
+                ['id' => 504, 'name' => 'Data Structures', 'status' => 'active'],
+                ['id' => 505, 'name' => 'Final Project', 'status' => 'active'],
             ],
         ],
     ];

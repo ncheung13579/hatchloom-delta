@@ -16,11 +16,11 @@ declare(strict_types=1);
  *
  * WHAT LISTENERS REACT TO THIS EVENT (defined in EventServiceProvider):
  *  1. UpdateDashboardCounts@handleStudentEnrolled
- *     — Logs the new active enrolment count (in D2+, would notify Dashboard Service)
+ *     — Logs the new active enrolment count (when real services are integrated, will notify Dashboard Service)
  *  2. NotifyTeacher@handleStudentEnrolled
- *     — Logs a teacher notification (in D2+, would send email/push notification)
+ *     — Logs a teacher notification (when real services are integrated, will send email/push notification)
  *  3. TriggerCredentialCheck@handle
- *     — Logs a credential evaluation trigger (in D2+, would call Karl's API)
+ *     — Logs a credential evaluation trigger (when real services are integrated, will call Karl's API)
  *
  * WHY EVENTS DECOUPLE THE ENROLMENT FROM ITS SIDE EFFECTS:
  *  - EnrolmentService only knows it needs to dispatch an event — it does not know

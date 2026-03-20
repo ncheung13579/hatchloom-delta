@@ -3,6 +3,8 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -19,5 +21,14 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Normalize Laravel validation errors into the standard Delta error envelope
+        // so all API consumers see one consistent format: {error, message, code, errors}.
+        $exceptions->renderable(function (ValidationException $e, Request $request) {
+            return response()->json([
+                'error' => true,
+                'message' => $e->getMessage(),
+                'code' => 'VALIDATION_ERROR',
+                'errors' => $e->errors(),
+            ], $e->status);
+        });
     })->create();

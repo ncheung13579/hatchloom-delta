@@ -17,9 +17,9 @@
  *   even when the Enrolment Service is down.
  *
  * Design patterns:
- *   - Strategy pattern: CourseDataProviderInterface is injected via constructor DI. In D1, the
- *     service container resolves this to MockCourseDataProvider. To switch to a real HTTP-backed
- *     provider, only the binding in AppServiceProvider needs to change.
+ *   - Strategy pattern: CourseDataProviderInterface is injected via constructor DI. When using
+ *     mock providers, the service container resolves this to MockCourseDataProvider. To switch
+ *     to a real HTTP-backed provider, only the binding in AppServiceProvider needs to change.
  *   - Repository pattern: ExperienceService acts as the repository boundary, keeping Eloquent
  *     queries out of the controller.
  *
@@ -36,6 +36,7 @@ use App\Contracts\CourseDataProviderInterface;
 use App\Services\ExperienceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 
 class ExperienceController extends Controller
@@ -138,6 +139,16 @@ class ExperienceController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        // Per Roles PDF: only School Teachers build experiences.
+        // School Admins can only manage enrolments (add/remove students from cohorts).
+        if (Auth::user()->role !== 'school_teacher') {
+            return response()->json([
+                'error' => true,
+                'message' => 'Only school teachers can create experiences',
+                'code' => 'FORBIDDEN',
+            ], 403);
+        }
+
         // Step 1: Structural validation — Laravel handles type/format checks.
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -262,6 +273,14 @@ class ExperienceController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
+        if (Auth::user()->role !== 'school_teacher') {
+            return response()->json([
+                'error' => true,
+                'message' => 'Only school teachers can update experiences',
+                'code' => 'FORBIDDEN',
+            ], 403);
+        }
+
         $experience = $this->experienceService->getExperience($id);
 
         if (!$experience) {
@@ -311,6 +330,14 @@ class ExperienceController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
+        if (Auth::user()->role !== 'school_teacher') {
+            return response()->json([
+                'error' => true,
+                'message' => 'Only school teachers can delete experiences',
+                'code' => 'FORBIDDEN',
+            ], 403);
+        }
+
         $experience = $this->experienceService->getExperience($id);
 
         if (!$experience) {

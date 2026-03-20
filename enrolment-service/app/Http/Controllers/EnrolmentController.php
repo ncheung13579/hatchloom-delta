@@ -92,11 +92,14 @@ class EnrolmentController extends Controller
                 : null,
         ], fn($value) => $value !== null);
 
-        // Students and parents can only see the authenticated student's own data.
+        // Role-based data scoping: students and parents are restricted to viewing
+        // only their own data. This overrides any client-supplied student_id filter
+        // to prevent a student from browsing another student's enrolment records.
         $user = Auth::user();
         if ($user->role === 'student') {
             $filters['student_id'] = $user->id;
         } elseif ($user->role === 'parent' && $user->parent_of) {
+            // parent_of links a parent user to their child's user ID
             $filters['student_id'] = $user->parent_of;
         }
 
@@ -184,6 +187,9 @@ class EnrolmentController extends Controller
             return $this->errorResponse('Cohort is at full capacity', 'VALIDATION_ERROR', 422);
         }
 
+        // Check for ANY existing enrolment record, including removed ones.
+        // Re-enrolment after removal is intentionally blocked to preserve the
+        // audit trail -- a removed record should remain as a historical fact.
         $existing = CohortEnrolment::where('cohort_id', $cohort->id)
             ->where('student_id', $studentId)
             ->first();

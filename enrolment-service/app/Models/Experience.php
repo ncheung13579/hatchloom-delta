@@ -28,6 +28,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * A curriculum package (template) built by a teacher for a school.
+ *
+ * Read-only reference model in the Enrolment Service -- the experiences table
+ * is owned by the Experience Service (port 8002). Used here to display
+ * experience names alongside cohort and enrolment data. One Experience can
+ * have many Cohorts, each a separate live offering of the same curriculum.
+ */
 class Experience extends Model
 {
     protected $fillable = ['school_id', 'name', 'description', 'status', 'created_by'];

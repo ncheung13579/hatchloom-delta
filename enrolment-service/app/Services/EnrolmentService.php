@@ -21,8 +21,8 @@ declare(strict_types=1);
  *    side effects (dashboard updates, teacher notifications, credential checks).
  *  - Strategy pattern: Depends on CredentialDataProviderInterface (constructor
  *    injection) so the credential data source can be swapped without changing
- *    this service. In D1, the mock returns zeroes; in production, it will query
- *    Karl's credential engine.
+ *    this service. With the mock provider, placeholder data is returned; when
+ *    real services are integrated, it will query Karl's credential engine.
  *
  * @see \App\Http\Controllers\EnrolmentController  The controller that uses this service
  * @see \App\Contracts\CredentialDataProviderInterface  Strategy pattern dependency
@@ -78,7 +78,7 @@ class EnrolmentService
      *  - experience_id: only students enrolled in cohorts of that experience
      *  - cohort_id: only students enrolled in that specific cohort
      *  - student_id: return only the specified student
-     *  - grade: no-op for D1 (the users table does not yet have a grade column)
+     *  - grade: currently a no-op (the users table does not yet have a grade column)
      *
      * Note: The student query is scoped to school_id and role='student' to ensure
      * tenant isolation and exclude admin/teacher users from the student list.
@@ -129,7 +129,7 @@ class EnrolmentService
         }
 
         // Grade filtering will be available when the users table includes a grade column.
-        // For D1 the parameter is accepted but not applied.
+        // Grade filtering is accepted but not yet applied (awaiting users table migration).
 
         $students = $query->paginate($perPage);
 
@@ -142,6 +142,10 @@ class EnrolmentService
 
     /**
      * Transform a student model into the enriched response with cohort assignments.
+     *
+     * Fetches all enrolments (active and removed) for the student, maps each to a
+     * flat array with cohort/experience names, and computes the aggregate
+     * assignment_status that summarises the student's overall enrolment state.
      */
     private function transformStudentWithAssignments(User $student): array
     {
@@ -152,6 +156,7 @@ class EnrolmentService
         $assignments = $enrolments->map(fn(CohortEnrolment $e) => [
             'cohort_id' => $e->cohort_id,
             'cohort_name' => $e->cohort?->name,
+            'experience_id' => $e->cohort?->experience_id,
             'experience_name' => $e->cohort?->experience?->name,
             'status' => $e->status,
             'enrolled_at' => $e->enrolled_at?->toIso8601String(),
@@ -349,6 +354,8 @@ class EnrolmentService
             ->get();
 
         foreach ($cohorts as $cohort) {
+            // 90% threshold: warn before a cohort is completely full so admins
+            // have time to open a new cohort or increase capacity.
             if ($cohort->capacity && $cohort->active_enrolments_count >= $cohort->capacity * 0.9) {
                 $warnings[] = [
                     'type' => 'capacity_warning',
@@ -434,6 +441,7 @@ class EnrolmentService
             return [
                 'cohort_id' => $enrolment->cohort_id,
                 'cohort_name' => $enrolment->cohort?->name,
+                'experience_id' => $enrolment->cohort?->experience_id,
                 'experience_name' => $enrolment->cohort?->experience?->name,
                 'status' => $enrolment->status,
                 'enrolled_at' => $enrolment->enrolled_at?->toIso8601String(),
@@ -441,7 +449,7 @@ class EnrolmentService
         });
 
         // Fetch credential data from the injected provider (Strategy pattern).
-        // In D1 this returns { total_earned: 0, in_progress: 0, details: [] }.
+        // With the mock provider this returns placeholder credential data.
         $credentials = $this->credentialProvider->getStudentCredentialSummary($studentId);
 
         return [

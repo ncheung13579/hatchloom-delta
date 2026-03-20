@@ -4,18 +4,18 @@
  * MockCredentialDataProvider — Static sample data for credential and curriculum APIs.
  *
  * Design pattern: Strategy (concrete implementation)
- *   This class is the D1 concrete Strategy for CredentialDataProviderInterface.
+ *   This class is the mock implementation of CredentialDataProviderInterface.
  *   It returns hardcoded sample data that demonstrates the expected response
  *   structure without requiring Karl's credential engine tables to exist.
  *
  * Important characteristics:
  *   - Returns the SAME data regardless of which $studentId is passed. This is
- *     intentional for D1 — the mock just needs to show the correct structure.
+ *     intentional when using mock providers — the mock just needs to show the correct structure.
  *   - All three credential types are represented: 'credential', 'badge', 'certificate'.
  *   - The curriculum mapping covers all three Alberta PoS areas with realistic
  *     requirement codes and coverage percentages.
  *
- * How to replace with real data (post-D1):
+ * How to replace with real data (when real services are integrated):
  *   1. Create a new class (e.g., CredentialDataProvider) implementing
  *      CredentialDataProviderInterface that queries the real DB tables
  *   2. Update the binding in AppServiceProvider::register() to point to the

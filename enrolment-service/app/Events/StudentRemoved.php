@@ -15,9 +15,9 @@ declare(strict_types=1);
  *
  * WHAT LISTENERS REACT TO THIS EVENT (defined in EventServiceProvider):
  *  1. UpdateDashboardCounts@handleStudentRemoved
- *     — Logs the updated active enrolment count (in D2+, would notify Dashboard Service)
+ *     — Logs the updated active enrolment count (when real services are integrated, will notify Dashboard Service)
  *  2. NotifyTeacher@handleStudentRemoved
- *     — Logs a teacher notification (in D2+, would send email/push notification)
+ *     — Logs a teacher notification (when real services are integrated, will send email/push notification)
  *
  * Note: TriggerCredentialCheck does NOT listen for this event because credential
  * evaluation is only meaningful at enrolment time, not removal time.

@@ -416,7 +416,7 @@ class EnrolmentTest extends TestCase
     }
 
     /**
-     * Verify that re-enrolling a removed student is blocked in D1.
+     * Verify that re-enrolling a removed student is blocked.
      * The duplicate check includes removed enrolments.
      */
     public function test_cannot_reenrol_after_removal(): void
