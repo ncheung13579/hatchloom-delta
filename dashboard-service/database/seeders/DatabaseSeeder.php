@@ -54,6 +54,7 @@ class DatabaseSeeder extends Seeder
             ],
         ]);
 
+        $grades = [10, 10, 11, 11, 9, 9, 12, 12, 8, 8];
         for ($i = 1; $i <= 10; $i++) {
             DB::table('users')->insertOrIgnore([
                 'id' => $i + 3,
@@ -62,6 +63,7 @@ class DatabaseSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'role' => 'student',
                 'school_id' => 1,
+                'grade' => $grades[$i - 1],
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
