@@ -55,3 +55,6 @@ legends reference documents/
 
 # Temporary debug scripts
 debug_403.php
+
+# Internal changelog (not for external distribution)
+CHANGELOG.md
