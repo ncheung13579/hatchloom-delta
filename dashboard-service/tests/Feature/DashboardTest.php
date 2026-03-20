@@ -151,6 +151,38 @@ class DashboardTest extends TestCase
             ]);
     }
 
+    private function createHatchloomUsers(): void
+    {
+        \Illuminate\Support\Facades\DB::table('users')->insert([
+            ['id' => 15, 'name' => 'Hatchloom Course Builder', 'email' => 'teacher@hatchloom.com', 'password' => bcrypt('password'), 'role' => 'hatchloom_teacher', 'school_id' => null, 'created_at' => now(), 'updated_at' => now()],
+            ['id' => 16, 'name' => 'Hatchloom Platform Admin', 'email' => 'admin@hatchloom.com', 'password' => bcrypt('password'), 'role' => 'hatchloom_admin', 'school_id' => null, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+    }
+
+    public function test_hatchloom_teacher_cannot_access_dashboard(): void
+    {
+        $this->createHatchloomUsers();
+
+        $response = $this->getJson('/api/school/dashboard', [
+            'Authorization' => 'Bearer test-hatchloom-teacher-token',
+        ]);
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    public function test_hatchloom_admin_cannot_access_dashboard(): void
+    {
+        $this->createHatchloomUsers();
+
+        $response = $this->getJson('/api/school/dashboard', [
+            'Authorization' => 'Bearer test-hatchloom-admin-token',
+        ]);
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
     public function test_student_role_cannot_read_school_wide_dashboard(): void
     {
         // Student user (ID 4) already created in setUp via auto-increment.
