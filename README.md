@@ -54,10 +54,15 @@ All three services connect to a single shared PostgreSQL database. Each service 
 git clone <repo-url> hatchloom-delta
 cd hatchloom-delta
 
-# Build and start all services — migrations and seeding run automatically on startup
+# Build and start all services
 docker compose up --build -d
+```
 
-# Verify all services are running (may take 10-15 seconds for first startup)
+Services start sequentially via healthchecks: PostgreSQL → Enrolment Service → Experience Service → Dashboard Service. Each service automatically runs migrations and seeds test data. First startup takes approximately 30-45 seconds while images build and migrations run.
+
+Once all containers are running, verify with:
+
+```bash
 curl http://localhost:8001/api/school/dashboard/health
 curl http://localhost:8002/api/school/experiences/health
 curl http://localhost:8003/api/school/enrolments/health
@@ -65,7 +70,21 @@ curl http://localhost:8003/api/school/enrolments/health
 
 Each health endpoint returns `{ "status": "ok", "service": "<name>", "timestamp": "..." }`.
 
-> **Note:** Each service automatically waits for PostgreSQL, runs migrations, and seeds test data on startup. No manual migration commands are needed.
+### Rebuilding After Code Changes
+
+Code is baked into Docker images at build time (no volume mounts). After editing source files, rebuild before restarting:
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+To reset the database and start fresh:
+
+```bash
+docker compose down -v
+docker compose up --build -d
+```
 
 ## Local Development (Without Docker)
 
@@ -74,7 +93,12 @@ Each service is an independent Laravel application. To run one locally:
 ```bash
 cd experience-service
 composer install
-cp .env.example .env   # or create .env with DB credentials
+cp .env.example .env
+```
+
+Edit `.env` to set `DB_HOST=localhost` (the `.env.example` defaults to `postgres`, the Docker hostname) and generate an app key:
+
+```bash
 php artisan key:generate
 php artisan migrate --seed
 php artisan serve --port=8002
@@ -82,26 +106,44 @@ php artisan serve --port=8002
 
 Repeat for `enrolment-service` (port 8003) and `dashboard-service` (port 8001).
 
-For the Dashboard Service to call the other services, set these environment variables:
+For cross-service HTTP calls to work locally, set these environment variables in each service's `.env`:
 
 ```
+# Dashboard Service .env
 EXPERIENCE_SERVICE_URL=http://localhost:8002
+ENROLMENT_SERVICE_URL=http://localhost:8003
+
+# Experience Service .env
 ENROLMENT_SERVICE_URL=http://localhost:8003
 ```
 
 ## Running Tests
 
-```bash
-# Via Docker
-docker compose exec experience-service php artisan test
-docker compose exec enrolment-service php artisan test
-docker compose exec dashboard-service php artisan test
+Tests require dev dependencies (phpunit), which are not included in the production Docker images. To run tests via Docker, install dev dependencies first:
 
-# Locally (from each service directory)
-cd experience-service && php artisan test
-cd enrolment-service && php artisan test
-cd dashboard-service && php artisan test
+```bash
+docker compose exec experience-service composer install --dev
+docker compose exec experience-service php artisan test
+
+docker compose exec enrolment-service composer install --dev
+docker compose exec enrolment-service php artisan test
+
+docker compose exec dashboard-service composer install --dev
+docker compose exec dashboard-service php artisan test
 ```
+
+To run tests locally (requires PHP 8.2 and Composer installed on your machine):
+
+```bash
+cd experience-service
+composer install
+cp .env.testing .env
+php artisan test
+```
+
+Repeat for `enrolment-service` and `dashboard-service`. The `.env.testing` files are pre-configured with test database credentials (`hatchloom_test`). You must have a local PostgreSQL instance with a `hatchloom_test` database available.
+
+Tests are also run automatically via GitHub Actions on push to `main` and on pull requests.
 
 ## API Contract
 
@@ -132,7 +174,7 @@ cd dashboard-service && php artisan test
 | `DB_USERNAME` | hatchloom | All | Database user |
 | `DB_PASSWORD` | secret | All | Database password |
 | `EXPERIENCE_SERVICE_URL` | http://experience-service:8002 | Dashboard | URL for Experience Service |
-| `ENROLMENT_SERVICE_URL` | http://enrolment-service:8003 | Dashboard | URL for Enrolment Service |
+| `ENROLMENT_SERVICE_URL` | http://enrolment-service:8003 | Dashboard, Experience | URL for Enrolment Service |
 | `CACHE_STORE` | array | All | Cache driver |
 | `SESSION_DRIVER` | array | All | Session driver |
 | `QUEUE_CONNECTION` | sync | All | Queue driver (synchronous for D1) |
@@ -146,13 +188,14 @@ GitHub Actions runs on push to `main` and on pull requests. The pipeline:
 
 See `.github/workflows/ci.yml` for details.
 
-## Known Limitations (D1)
+## Known Limitations
 
-- **Authentication is mocked** -- hardcoded bearer token-to-user mapping; no real OAuth/JWT auth system.
+- **Authentication is mocked** -- hardcoded bearer token-to-user mapping via `MockAuthMiddleware`. Production auth will use session tokens validated by the API Gateway (see API contract for details).
 - **Course data is mocked** -- the course catalogue from Team Papa is provided by a `MockCourseDataProvider` class rather than real HTTP calls. Only course IDs 1-5 exist.
-- **No real inter-team integration** -- all cross-team data (courses, credentials, LaunchPad) is seeded or hardcoded.
-- **Credential data is mocked** -- returns sample data (2 earned, 1 in-progress) for all students. Real credential engine (Karl's Role B) is not yet integrated.
-- **School scoping uses mock data** -- only one school (Ridgewood Academy) is seeded; multi-tenant isolation is implemented but not tested across multiple schools.
+- **Credential data is mocked** -- `MockCredentialDataProvider` returns sample data for all students. Real credential data will come from Karl's credential engine.
+- **Progress data is mocked** -- `MockStudentProgressProvider` returns placeholder values. Real progress data will come from Team Papa's Course Service.
+- **No real inter-team integration** -- all cross-team data (courses, credentials, progress) is provided by mock providers implementing strategy-pattern interfaces. See the API contract "Data Ownership" section for swap instructions.
+- **School scoping uses mock data** -- only one school (Ridgewood Academy) is seeded. Multi-tenant isolation is implemented but not tested across multiple schools.
 - **No API gateway** -- services call each other directly over the Docker network.
 
 ## Team Members
