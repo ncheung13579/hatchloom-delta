@@ -82,6 +82,28 @@ class DatabaseSeeder extends Seeder
             'updated_at' => now(),
         ]);
 
+        // Platform-level roles (no school_id — belong to Hatchloom, not a school)
+        DB::table('users')->insertOrIgnore([
+            'id' => 15,
+            'name' => 'Hatchloom Course Builder',
+            'email' => 'teacher@hatchloom.com',
+            'password' => Hash::make('password'),
+            'role' => 'hatchloom_teacher',
+            'school_id' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('users')->insertOrIgnore([
+            'id' => 16,
+            'name' => 'Hatchloom Platform Admin',
+            'email' => 'admin@hatchloom.com',
+            'password' => Hash::make('password'),
+            'role' => 'hatchloom_admin',
+            'school_id' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         // Seed experiences (reference data for cohorts FK)
         DB::table('experiences')->insertOrIgnore([
             [

@@ -157,6 +157,8 @@ Tests are also run automatically via GitHub Actions on push to `main` and on pul
 | `test-teacher-token` | Ms. Smith (id=2) | school_teacher |
 | `test-student-token` | Student 1 (id=4) | student |
 | `test-parent-token` | Parent of Student 1 (id=14) | parent |
+| `test-hatchloom-teacher-token` | Hatchloom Course Builder (id=15) | hatchloom_teacher |
+| `test-hatchloom-admin-token` | Hatchloom Platform Admin (id=16) | hatchloom_admin |
 
 ## Environment Variables
 
