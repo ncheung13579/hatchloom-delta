@@ -16,15 +16,18 @@
  * Current bindings (mock data):
  *   CredentialDataProviderInterface  -> MockCredentialDataProvider
  *   StudentProgressProviderInterface -> MockStudentProgressProvider
+ *   LaunchPadDataProviderInterface   -> MockLaunchPadDataProvider
  *   DashboardWidgetFactory           -> singleton (stateless, reusable)
  *
  * Future bindings (real integrations):
  *   CredentialDataProviderInterface  -> CredentialDataProvider (queries Karl's tables)
  *   StudentProgressProviderInterface -> StudentProgressProvider (queries Course Service + activity logs)
+ *   LaunchPadDataProviderInterface   -> HttpLaunchPadDataProvider (calls Quebec's LaunchPad API)
  *   DashboardWidgetFactory           -> singleton (no change needed)
  *
  * @see \App\Contracts\CredentialDataProviderInterface   Strategy interface for credentials
  * @see \App\Contracts\StudentProgressProviderInterface  Strategy interface for progress metrics
+ * @see \App\Contracts\LaunchPadDataProviderInterface    Strategy interface for LaunchPad ventures
  * @see \App\Factories\DashboardWidgetFactory            Factory for widget instantiation
  */
 
@@ -33,9 +36,11 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Contracts\CredentialDataProviderInterface;
+use App\Contracts\LaunchPadDataProviderInterface;
 use App\Contracts\StudentProgressProviderInterface;
 use App\Factories\DashboardWidgetFactory;
 use App\Services\MockCredentialDataProvider;
+use App\Services\MockLaunchPadDataProvider;
 use App\Services\MockStudentProgressProvider;
 use Illuminate\Support\ServiceProvider;
 
@@ -63,6 +68,10 @@ class AppServiceProvider extends ServiceProvider
         // Strategy binding: student progress metrics (mock — swap to real in AppServiceProvider)
         // Replace with real implementation when Team Papa's Course Service is integrated
         $this->app->bind(StudentProgressProviderInterface::class, MockStudentProgressProvider::class);
+
+        // Strategy binding: LaunchPad venture data (mock — swap to real in AppServiceProvider)
+        // Replace with real implementation when Team Quebec's LaunchPad Service is integrated
+        $this->app->bind(LaunchPadDataProviderInterface::class, MockLaunchPadDataProvider::class);
 
         // Widget factory: singleton because it's stateless — the WIDGET_MAP constant
         // never changes, so there's no reason to create multiple instances

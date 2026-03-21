@@ -40,6 +40,7 @@ namespace App\Services;
 
 use App\Contracts\CredentialDataProviderInterface;
 use App\Contracts\DashboardWidget;
+use App\Contracts\LaunchPadDataProviderInterface;
 use App\Contracts\StudentProgressProviderInterface;
 use App\Factories\DashboardWidgetFactory;
 use App\Models\User;
@@ -49,15 +50,17 @@ use Illuminate\Support\Facades\Http;
 class DashboardService
 {
     /**
-     * All three dependencies are injected by Laravel's service container.
+     * All four dependencies are injected by Laravel's service container.
      *
      * - $credentialProvider: Currently resolves to MockCredentialDataProvider (Strategy pattern)
      * - $progressProvider: Currently resolves to MockStudentProgressProvider (Strategy pattern)
+     * - $launchPadProvider: Currently resolves to MockLaunchPadDataProvider (Strategy pattern)
      * - $widgetFactory: Singleton instance that maps type strings to widget classes
      */
     public function __construct(
         private readonly CredentialDataProviderInterface $credentialProvider,
         private readonly StudentProgressProviderInterface $progressProvider,
+        private readonly LaunchPadDataProviderInterface $launchPadProvider,
         private readonly DashboardWidgetFactory $widgetFactory
     ) {}
 
@@ -111,13 +114,12 @@ class DashboardService
 
         $experiences = $experienceData['data'] ?? [];
         $experienceCount = count($experiences);
-        $activeExperiences = array_filter($experiences, fn($e) => ($e['status'] ?? '') === 'active');
 
         return [
             'school' => ['id' => $school->id, 'name' => $school->name],
             'summary' => [
                 'problems_tackled' => $this->progressProvider->countProblemsTackled($experiences),
-                'active_ventures' => count($activeExperiences),
+                'active_ventures' => $this->launchPadProvider->countActiveVentures($school->id),
                 'students' => $totalStudents,
                 'experiences' => $experienceCount,
                 'credit_progress' => $this->progressProvider->calculateCreditProgress($experiences),
@@ -392,6 +394,7 @@ class DashboardService
             'experiences' => $experiences,
             'progress_provider' => $this->progressProvider,
             'credential_provider' => $this->credentialProvider,
+            'launchpad_provider' => $this->launchPadProvider,
         ];
 
         return $this->widgetFactory->create($type, $context);

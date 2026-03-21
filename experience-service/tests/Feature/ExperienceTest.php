@@ -813,4 +813,88 @@ class ExperienceTest extends TestCase
                 'code' => 'VALIDATION_ERROR',
             ]);
     }
+
+    // ── Pagination edge cases ─────────────────────────────────
+
+    /**
+     * Verify that requesting a page beyond the last page returns empty data.
+     */
+    public function test_pagination_page_beyond_last_returns_empty_data(): void
+    {
+        Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Only Experience',
+            'description' => 'Test',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->getJson('/api/school/experiences?page=999', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonCount(0, 'data');
+    }
+
+    /**
+     * Verify that per_page=1 returns exactly one record per page with correct meta.
+     */
+    public function test_pagination_per_page_one(): void
+    {
+        for ($i = 1; $i <= 3; $i++) {
+            Experience::create([
+                'school_id' => $this->school->id,
+                'name' => "Experience {$i}",
+                'description' => 'Test',
+                'status' => 'active',
+                'created_by' => $this->admin->id,
+            ]);
+        }
+
+        $response = $this->getJson('/api/school/experiences?per_page=1', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.per_page', 1)
+            ->assertJsonPath('meta.total', 3)
+            ->assertJsonPath('meta.last_page', 3);
+    }
+
+    // ── Archived experience visibility ────────────────────────
+
+    /**
+     * Verify that archived (soft-deleted) experiences do not appear in the list endpoint.
+     * Creates two experiences, archives one via the API, and verifies only the active one remains.
+     */
+    public function test_archived_experience_not_in_list(): void
+    {
+        Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Active One',
+            'description' => 'Should be visible',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $toArchive = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Will Be Archived',
+            'description' => 'Should not be visible after delete',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        // Archive via the API (sets status='archived' + soft-deletes)
+        $this->deleteJson("/api/school/experiences/{$toArchive->id}", [], $this->teacherAuthHeaders())
+            ->assertStatus(200);
+
+        $response = $this->getJson('/api/school/experiences', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonFragment(['name' => 'Active One']);
+
+        // Verify the archived one is NOT in the response
+        $names = array_column($response->json('data'), 'name');
+        $this->assertNotContains('Will Be Archived', $names);
+    }
 }

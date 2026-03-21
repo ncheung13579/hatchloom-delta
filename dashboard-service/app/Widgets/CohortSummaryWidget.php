@@ -30,6 +30,7 @@ declare(strict_types=1);
 namespace App\Widgets;
 
 use App\Contracts\DashboardWidget;
+use App\Contracts\LaunchPadDataProviderInterface;
 use App\Contracts\StudentProgressProviderInterface;
 use Illuminate\Support\Facades\Http;
 
@@ -40,6 +41,7 @@ class CohortSummaryWidget implements DashboardWidget
     private string $schoolName;
     private array $experiences;
     private StudentProgressProviderInterface $progressProvider;
+    private LaunchPadDataProviderInterface $launchPadProvider;
 
     /**
      * Widgets receive a context array (not individual constructor params) because
@@ -55,6 +57,7 @@ class CohortSummaryWidget implements DashboardWidget
         // duplicate HTTP calls when multiple widgets need the same data
         $this->experiences = $context['experiences'] ?? [];
         $this->progressProvider = $context['progress_provider'];
+        $this->launchPadProvider = $context['launchpad_provider'];
     }
 
     public function getData(): array
@@ -69,11 +72,6 @@ class CohortSummaryWidget implements DashboardWidget
         $totalEnrolled = $enrolmentStats['enrolled'] ?? 0;
         $assigned = $enrolmentStats['assigned'] ?? 0;
         $totalStudents = $enrolmentStats['total_students'] ?? 0;
-
-        $activeExperiences = array_filter(
-            $this->experiences,
-            fn(array $e): bool => ($e['status'] ?? '') === 'active'
-        );
 
         return [
             'school' => [
@@ -92,7 +90,7 @@ class CohortSummaryWidget implements DashboardWidget
                 'credit_progress' => $this->progressProvider->calculateCreditProgress($this->experiences),
                 'timely_completion' => $this->progressProvider->calculateTimelyCompletion($totalEnrolled, $assigned),
                 'problems_tackled' => $this->progressProvider->countProblemsTackled($this->experiences),
-                'active_ventures' => count($activeExperiences),
+                'active_ventures' => $this->launchPadProvider->countActiveVentures($this->schoolId),
             ],
             'warnings' => $warnings,
         ];

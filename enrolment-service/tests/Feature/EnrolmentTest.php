@@ -974,6 +974,130 @@ class EnrolmentTest extends TestCase
         });
     }
 
+    // ── Removed student visibility ─────────────────────────
+
+    /**
+     * Verify that removed students still appear in the enrolment list
+     * with status 'removed' so admins can see the full audit trail.
+     */
+    public function test_removed_students_appear_in_enrolment_list(): void
+    {
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'removed',
+            'enrolled_at' => now()->subDays(5),
+            'removed_at' => now(),
+        ]);
+
+        $response = $this->getJson('/api/school/enrolments', $this->authHeaders());
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        $studentEntry = collect($data)->firstWhere('student_id', $this->student->id);
+        $this->assertNotNull($studentEntry);
+        // The student should appear with cohort_assignments showing the removed status
+        $this->assertNotEmpty($studentEntry['cohort_assignments']);
+    }
+
+    /**
+     * Verify that students with no cohort enrolments show assignment_status='not_assigned'.
+     */
+    public function test_not_assigned_status_for_student_without_cohort(): void
+    {
+        // Student exists in setUp but has no enrolments
+        $response = $this->getJson('/api/school/enrolments', $this->authHeaders());
+
+        $response->assertStatus(200);
+        $data = $response->json('data');
+        $studentEntry = collect($data)->firstWhere('student_id', $this->student->id);
+        $this->assertNotNull($studentEntry);
+        $this->assertEquals('not_assigned', $studentEntry['assignment_status']);
+        $this->assertEmpty($studentEntry['cohort_assignments']);
+    }
+
+    // ── Grade field assertion ────────────────────────────────
+
+    /**
+     * Verify that the student detail endpoint includes the grade field
+     * with the correct value when set.
+     */
+    public function test_student_detail_includes_grade_field(): void
+    {
+        // Update the student to have a grade
+        $this->student->update(['grade' => 10]);
+
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        $response = $this->getJson(
+            "/api/school/enrolments/students/{$this->student->id}",
+            $this->authHeaders()
+        );
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertArrayHasKey('grade', $data['student']);
+        $this->assertEquals(10, $data['student']['grade']);
+    }
+
+    /**
+     * Verify that the student detail endpoint handles null grade gracefully.
+     */
+    public function test_student_detail_handles_null_grade(): void
+    {
+        $response = $this->getJson(
+            "/api/school/enrolments/students/{$this->student->id}",
+            $this->authHeaders()
+        );
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertArrayHasKey('grade', $data['student']);
+        $this->assertNull($data['student']['grade']);
+    }
+
+    // ── Pagination edge cases ────────────────────────────────
+
+    /**
+     * Verify that requesting a page beyond the last page returns empty data.
+     */
+    public function test_pagination_page_beyond_last_returns_empty_data(): void
+    {
+        $response = $this->getJson('/api/school/enrolments?page=999', $this->authHeaders());
+
+        $response->assertStatus(200);
+        $this->assertEmpty($response->json('data'));
+    }
+
+    /**
+     * Verify that per_page=1 returns exactly one record per page.
+     */
+    public function test_pagination_per_page_one(): void
+    {
+        // Create a second student so there are 2 total
+        User::create([
+            'name' => 'Student Extra',
+            'email' => 'extra@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'student',
+            'school_id' => $this->school->id,
+        ]);
+
+        $response = $this->getJson('/api/school/enrolments?per_page=1', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('meta.per_page', 1)
+            ->assertJsonPath('meta.total', 2);
+    }
+
+    // ── Observer pattern / Event dispatch tests ───────────────
+
     /**
      * Verify that the StudentRemoved event carries correct data including the removedAt timestamp.
      */

@@ -113,7 +113,7 @@ class DashboardTest extends TestCase
 
         $data = $response->json();
         $this->assertEquals(1, $data['summary']['experiences']);
-        $this->assertEquals(1, $data['summary']['active_ventures']);
+        $this->assertEquals(7, $data['summary']['active_ventures']); // From MockLaunchPadDataProvider
         $this->assertEquals(10, $data['summary']['students']);
         $this->assertEquals(1, $data['cohorts']['active']);
         $this->assertEquals(1, $data['cohorts']['completed']);
@@ -465,7 +465,7 @@ class DashboardTest extends TestCase
 
         // Summary values
         $this->assertEquals(3, $data['summary']['experiences']);
-        $this->assertEquals(2, $data['summary']['active_ventures']);
+        $this->assertEquals(7, $data['summary']['active_ventures']); // From MockLaunchPadDataProvider
         $this->assertEquals(20, $data['summary']['students']);
         $this->assertEquals(6, $data['summary']['problems_tackled']); // 2 active * 3
 
@@ -679,7 +679,7 @@ class DashboardTest extends TestCase
         $this->assertEquals(3, $data['data']['cohorts']['total']);
         $this->assertEquals(8, $data['data']['students']['total_enrolled']);
         $this->assertEquals(6, $data['data']['students']['active_in_cohorts']);
-        $this->assertEquals(1, $data['data']['statistics']['active_ventures']);
+        $this->assertEquals(7, $data['data']['statistics']['active_ventures']); // From MockLaunchPadDataProvider
     }
 
     /**
@@ -837,5 +837,137 @@ class DashboardTest extends TestCase
     {
         $response = $this->getJson('/api/school/dashboard/widgets/cohort_summary');
         $response->assertStatus(401);
+    }
+
+    // ── Parent role tests ─────────────────────────────────────
+
+    private function createParentUser(): void
+    {
+        // Parent user with ID 14 → matches TOKEN_MAP 'test-parent-token'
+        // parent_of points to the student (ID 4)
+        \Illuminate\Support\Facades\DB::table('users')->insert([
+            'id' => 14,
+            'name' => 'Parent of Student 1',
+            'email' => 'parent@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'parent',
+            'school_id' => $this->school->id,
+            'parent_of' => $this->student->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * Parent can view their own child's drill-down data.
+     * The controller checks $user->parent_of === $studentId.
+     */
+    public function test_parent_can_view_own_childs_drill_down(): void
+    {
+        $this->createParentUser();
+        $studentId = $this->student->id;
+
+        Http::fake([
+            "*/api/school/enrolments/students/{$studentId}" => Http::response([
+                'student' => [
+                    'id' => $studentId,
+                    'name' => 'Student 1',
+                    'email' => 'student1@ridgewood.edu',
+                    'grade' => null,
+                ],
+                'enrolments' => [],
+                'credentials' => [],
+            ]),
+        ]);
+
+        $response = $this->getJson("/api/school/dashboard/students/{$studentId}", [
+            'Authorization' => 'Bearer test-parent-token',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('student.id', $studentId)
+            ->assertJsonPath('student.name', 'Student 1');
+    }
+
+    /**
+     * Parent cannot view a student who is not their child.
+     * The controller returns 403 when parent_of does not match the requested studentId.
+     */
+    public function test_parent_cannot_view_other_students_drill_down(): void
+    {
+        $this->createParentUser();
+
+        // Create another student (not the parent's child)
+        $otherStudent = User::create([
+            'name' => 'Other Student',
+            'email' => 'other@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'student',
+            'school_id' => $this->school->id,
+        ]);
+
+        $response = $this->getJson("/api/school/dashboard/students/{$otherStudent->id}", [
+            'Authorization' => 'Bearer test-parent-token',
+        ]);
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    /**
+     * Parent cannot access the school-wide dashboard overview.
+     * Only school_admin and school_teacher roles are allowed.
+     */
+    public function test_parent_cannot_access_dashboard_overview(): void
+    {
+        $this->createParentUser();
+
+        $response = $this->getJson('/api/school/dashboard', [
+            'Authorization' => 'Bearer test-parent-token',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    /**
+     * Parent cannot access POS coverage reporting (school-wide data).
+     */
+    public function test_parent_cannot_access_pos_coverage(): void
+    {
+        $this->createParentUser();
+
+        $response = $this->getJson('/api/school/dashboard/reporting/pos-coverage', [
+            'Authorization' => 'Bearer test-parent-token',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    /**
+     * Parent cannot access engagement rates reporting (school-wide data).
+     */
+    public function test_parent_cannot_access_engagement_rates(): void
+    {
+        $this->createParentUser();
+
+        $response = $this->getJson('/api/school/dashboard/reporting/engagement', [
+            'Authorization' => 'Bearer test-parent-token',
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    /**
+     * Parent cannot access dashboard widgets (school-wide data).
+     */
+    public function test_parent_cannot_access_widgets(): void
+    {
+        $this->createParentUser();
+
+        $response = $this->getJson('/api/school/dashboard/widgets', [
+            'Authorization' => 'Bearer test-parent-token',
+        ]);
+
+        $response->assertStatus(403);
     }
 }

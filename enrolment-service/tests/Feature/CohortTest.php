@@ -603,4 +603,85 @@ class CohortTest extends TestCase
         $response->assertStatus(403)
             ->assertJsonFragment(['code' => 'FORBIDDEN']);
     }
+
+    // ── Capacity default ─────────────────────────────────────
+
+    /**
+     * Creating a cohort without specifying capacity should succeed.
+     * Capacity is nullable — no default is applied at the model level.
+     */
+    public function test_create_cohort_without_capacity_succeeds(): void
+    {
+        $response = $this->postJson('/api/school/cohorts', [
+            'experience_id' => $this->experience->id,
+            'name' => 'No Capacity Cohort',
+            'start_date' => '2026-04-01',
+            'end_date' => '2026-08-01',
+        ], $this->teacherAuthHeaders());
+
+        $response->assertStatus(201);
+        $data = $response->json();
+        $this->assertEquals('No Capacity Cohort', $data['name']);
+        $this->assertEquals('not_started', $data['status']);
+    }
+
+    // ── Cohort show response completeness ─────────────────────
+
+    /**
+     * Verify GET /cohorts/{id} returns all required fields:
+     * id, name, status, capacity, student_count, teacher_name, start_date, end_date, experience_id.
+     */
+    public function test_cohort_show_includes_all_required_fields(): void
+    {
+        $cohort = Cohort::create([
+            'experience_id' => $this->experience->id,
+            'school_id' => $this->school->id,
+            'name' => 'Full Fields Cohort',
+            'status' => 'active',
+            'capacity' => 30,
+            'teacher_id' => $this->teacher->id,
+            'start_date' => '2026-02-01',
+            'end_date' => '2026-06-01',
+        ]);
+
+        $response = $this->getJson("/api/school/cohorts/{$cohort->id}", $this->authHeaders());
+
+        $response->assertStatus(200);
+        $data = $response->json();
+
+        // Verify all required fields are present
+        $this->assertArrayHasKey('id', $data);
+        $this->assertArrayHasKey('name', $data);
+        $this->assertArrayHasKey('status', $data);
+        $this->assertArrayHasKey('capacity', $data);
+        $this->assertArrayHasKey('student_count', $data);
+        $this->assertArrayHasKey('teacher_name', $data);
+        $this->assertArrayHasKey('start_date', $data);
+        $this->assertArrayHasKey('end_date', $data);
+        $this->assertArrayHasKey('experience_id', $data);
+
+        // Verify field values
+        $this->assertEquals($cohort->id, $data['id']);
+        $this->assertEquals('Full Fields Cohort', $data['name']);
+        $this->assertEquals('active', $data['status']);
+        $this->assertEquals(30, $data['capacity']);
+        $this->assertEquals(0, $data['student_count']);
+        $this->assertEquals('Ms. Smith', $data['teacher_name']);
+        $this->assertEquals('2026-02-01', $data['start_date']);
+        $this->assertEquals('2026-06-01', $data['end_date']);
+        $this->assertEquals($this->experience->id, $data['experience_id']);
+    }
+
+    // ── Pagination edge cases ────────────────────────────────
+
+    /**
+     * Verify that requesting a page beyond the last page returns empty data.
+     */
+    public function test_pagination_page_beyond_last_returns_empty_data(): void
+    {
+        $response = $this->getJson('/api/school/cohorts?page=999', $this->authHeaders());
+
+        $response->assertStatus(200);
+        $this->assertEmpty($response->json('data'));
+    }
 }
