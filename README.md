@@ -60,15 +60,31 @@ docker compose up --build -d
 
 Services start sequentially via healthchecks: PostgreSQL → Enrolment Service → Experience Service → Dashboard Service. Each service automatically runs migrations and seeds test data. First startup takes approximately 30-45 seconds while images build and migrations run.
 
-Once all containers are running, verify with:
+Check that all containers are healthy:
 
 ```bash
-curl http://localhost:8001/api/school/dashboard/health
-curl http://localhost:8002/api/school/experiences/health
-curl http://localhost:8003/api/school/enrolments/health
+docker compose ps
+```
+
+All three services and PostgreSQL should show `healthy` status. Then verify endpoints:
+
+```bash
+curl -4 http://localhost:8001/api/school/dashboard/health
+curl -4 http://localhost:8002/api/school/experiences/health
+curl -4 http://localhost:8003/api/school/enrolments/health
 ```
 
 Each health endpoint returns `{ "status": "ok", "service": "<name>", "timestamp": "..." }`.
+
+**Windows users:** In PowerShell, `curl` is an alias for `Invoke-WebRequest` and will not work. Use `curl.exe` instead:
+
+```powershell
+curl.exe -4 http://localhost:8001/api/school/dashboard/health
+curl.exe -4 http://localhost:8002/api/school/experiences/health
+curl.exe -4 http://localhost:8003/api/school/enrolments/health
+```
+
+The `-4` flag forces IPv4. Docker containers bind to `0.0.0.0` (IPv4 only), and Windows often defaults to IPv6 (`::1`), which will cause "connection refused" errors without this flag.
 
 ### Rebuilding After Code Changes
 
@@ -189,6 +205,16 @@ GitHub Actions runs on push to `main` and on pull requests. The pipeline:
 2. Builds all Docker images via `docker compose build`
 
 See `.github/workflows/ci.yml` for details.
+
+## Startup Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `curl: (7) Failed to connect ... Connection refused` | Windows defaults to IPv6; Docker binds IPv4 only | Add `-4` flag: `curl -4 http://localhost:...` |
+| PowerShell returns HTML or `Invoke-WebRequest` errors | PowerShell aliases `curl` to `Invoke-WebRequest` | Use `curl.exe` instead of `curl` |
+| Container shows `unhealthy` or exits | Upstream dependency not ready yet | Wait 30-45s for healthcheck chain to complete, then run `docker compose ps` |
+| Code changes not reflected | Source is baked into images at build time | Run `docker compose build` then `docker compose up -d` |
+| Port conflict on 8001/8002/8003 | Another process using the port | Stop the conflicting process or edit port mappings in `docker-compose.yml` |
 
 ## Known Limitations
 
