@@ -42,6 +42,17 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ExperienceScreenController extends Controller
 {
+    private static function sanitizeCsvValue(?string $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+        if (preg_match('/^[=+\-@\t\r]/', $value)) {
+            return "'" . $value;
+        }
+        return $value;
+    }
+
     /**
      * @param ExperienceService       $experienceService  Used solely to look up and validate the parent Experience.
      * @param ExperienceScreenService $screenService      Handles all data aggregation for Screen 302 sub-resources.
@@ -72,7 +83,7 @@ class ExperienceScreenController extends Controller
         }
 
         $search = $request->query('search');
-        $perPage = (int) $request->query('per_page', 15);
+        $perPage = min(max((int) $request->query('per_page', 15), 1), 100);
         $result = $this->screenService->getEnrolledStudents($experience, $search, $perPage);
 
         return response()->json($result);
@@ -104,7 +115,7 @@ class ExperienceScreenController extends Controller
             $handle = fopen('php://output', 'w');
             fputcsv($handle, ['student_name', 'student_email', 'cohort_name', 'status', 'enrolled_at']);
             foreach ($rows as $row) {
-                fputcsv($handle, $row);
+                fputcsv($handle, array_map(self::sanitizeCsvValue(...), $row));
             }
             fclose($handle);
         }, 'experience-students.csv', [

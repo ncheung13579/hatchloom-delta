@@ -859,6 +859,150 @@ class ExperienceTest extends TestCase
             ->assertJsonPath('meta.last_page', 3);
     }
 
+    // ── Fix verification: per_page clamping ─────────────────
+
+    public function test_per_page_clamped_to_max_100(): void
+    {
+        $response = $this->getJson('/api/school/experiences?per_page=500', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonPath('meta.per_page', 100);
+    }
+
+    public function test_per_page_clamped_to_min_1(): void
+    {
+        $response = $this->getJson('/api/school/experiences?per_page=0', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonPath('meta.per_page', 1);
+    }
+
+    public function test_per_page_negative_clamped_to_1(): void
+    {
+        $response = $this->getJson('/api/school/experiences?per_page=-10', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonPath('meta.per_page', 1);
+    }
+
+    // ── Fix verification: whitespace-only name rejection ──────
+
+    public function test_create_experience_with_whitespace_only_name_fails(): void
+    {
+        $response = $this->postJson('/api/school/experiences', [
+            'name' => '   ',
+            'description' => 'Valid description',
+            'course_ids' => [1],
+        ], $this->teacherAuthHeaders());
+
+        $response->assertStatus(422);
+    }
+
+    public function test_update_experience_with_whitespace_only_name_fails(): void
+    {
+        $experience = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Valid Name',
+            'description' => 'Valid description',
+            'status' => 'active',
+            'created_by' => $this->teacher->id,
+        ]);
+
+        $response = $this->putJson("/api/school/experiences/{$experience->id}", [
+            'name' => '   ',
+        ], $this->teacherAuthHeaders());
+
+        $response->assertStatus(422);
+    }
+
+    // ── Fix verification: description max length ──────────────
+
+    public function test_create_experience_with_very_long_description_fails(): void
+    {
+        $response = $this->postJson('/api/school/experiences', [
+            'name' => 'Valid Name',
+            'description' => str_repeat('A', 5001),
+            'course_ids' => [1],
+        ], $this->teacherAuthHeaders());
+
+        $response->assertStatus(422);
+    }
+
+    public function test_create_experience_with_max_description_succeeds(): void
+    {
+        $response = $this->postJson('/api/school/experiences', [
+            'name' => 'Valid Name',
+            'description' => str_repeat('A', 5000),
+            'course_ids' => [1],
+        ], $this->teacherAuthHeaders());
+
+        $response->assertStatus(201);
+    }
+
+    // ── Fix verification: CSV formula injection sanitization ──
+
+    public function test_csv_export_sanitizes_formula_injection(): void
+    {
+        Http::fake([
+            '*/api/school/enrolments*' => Http::response([
+                'data' => [
+                    [
+                        'student_id' => 10,
+                        'name' => '=CMD("calc")',
+                        'email' => '+danger@school.test',
+                        'cohort_assignments' => [
+                            ['cohort_id' => 1, 'cohort_name' => '-Malicious Cohort', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01'],
+                        ],
+                        'assignment_status' => 'assigned',
+                    ],
+                ],
+            ]),
+        ]);
+
+        $experience = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Test Experience',
+            'description' => 'Test',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->get("/api/school/experiences/{$experience->id}/students/export", $this->authHeaders());
+
+        $response->assertStatus(200);
+        $content = $response->streamedContent();
+
+        // Formula-prefix characters should be escaped with a leading apostrophe
+        $this->assertStringContainsString("'=CMD", $content);
+        $this->assertStringContainsString("'+danger@school.test", $content);
+        $this->assertStringContainsString("'-Malicious Cohort", $content);
+    }
+
+    // ── Fix verification: experience students per_page clamping ──
+
+    public function test_experience_students_per_page_clamped(): void
+    {
+        Http::fake([
+            '*/api/school/enrolments*' => Http::response([
+                'data' => [],
+            ]),
+        ]);
+
+        $experience = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Test Experience',
+            'description' => 'Test',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->getJson("/api/school/experiences/{$experience->id}/students?per_page=500", $this->authHeaders());
+
+        $response->assertStatus(200);
+        // The per_page in meta should be clamped to 100
+        $this->assertLessThanOrEqual(100, $response->json('meta.per_page'));
+    }
+
     // ── Archived experience visibility ────────────────────────
 
     /**

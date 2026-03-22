@@ -35,6 +35,7 @@ use App\Services\EnrolmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -75,7 +76,7 @@ class EnrolmentController extends Controller
     public function index(Request $request): JsonResponse
     {
         $search = $request->query('search');
-        $perPage = (int) $request->query('per_page', 15);
+        $perPage = min(max((int) $request->query('per_page', 15), 1), 100);
 
         // Build a filters array, removing any null values so downstream code
         // only processes filters that were actually provided by the client.
@@ -136,29 +137,33 @@ class EnrolmentController extends Controller
      */
     public function enrol(Request $request, int $cohortId): JsonResponse
     {
-        $cohort = Cohort::find($cohortId);
-        if (!$cohort) {
-            return $this->errorResponse('Cohort not found', 'NOT_FOUND', 404);
-        }
-
         $validated = $request->validate(['student_id' => 'required|integer']);
         $studentId = $validated['student_id'];
 
-        // Run the 5-step validation chain; returns a JsonResponse on failure or null on success
-        $validationError = $this->validateEnrolment($cohort, $studentId);
-        if ($validationError) {
-            return $validationError;
-        }
+        // Wrap validation + creation in a transaction with a pessimistic lock on the
+        // cohort row. This prevents the TOCTOU race condition where two concurrent
+        // requests both pass the capacity check and exceed the cohort's limit.
+        return DB::transaction(function () use ($cohortId, $studentId) {
+            $cohort = Cohort::lockForUpdate()->find($cohortId);
+            if (!$cohort) {
+                return $this->errorResponse('Cohort not found', 'NOT_FOUND', 404);
+            }
 
-        $enrolment = $this->enrolmentService->enrolStudent($cohort, $studentId);
+            $validationError = $this->validateEnrolment($cohort, $studentId);
+            if ($validationError) {
+                return $validationError;
+            }
 
-        return response()->json([
-            'id' => $enrolment->id,
-            'cohort_id' => $enrolment->cohort_id,
-            'student_id' => $enrolment->student_id,
-            'status' => $enrolment->status,
-            'enrolled_at' => $enrolment->enrolled_at?->toIso8601String(),
-        ], 201);
+            $enrolment = $this->enrolmentService->enrolStudent($cohort, $studentId);
+
+            return response()->json([
+                'id' => $enrolment->id,
+                'cohort_id' => $enrolment->cohort_id,
+                'student_id' => $enrolment->student_id,
+                'status' => $enrolment->status,
+                'enrolled_at' => $enrolment->enrolled_at?->toIso8601String(),
+            ], 201);
+        });
     }
 
     /**
@@ -213,6 +218,17 @@ class EnrolmentController extends Controller
             'message' => $message,
             'code' => $code,
         ], $status);
+    }
+
+    private static function sanitizeCsvValue(?string $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+        if (preg_match('/^[=+\-@\t\r]/', $value)) {
+            return "'" . $value;
+        }
+        return $value;
     }
 
     /**
@@ -303,10 +319,9 @@ class EnrolmentController extends Controller
         // and then calls the closure to write CSV rows directly to the output stream.
         return response()->streamDownload(function () use ($rows) {
             $handle = fopen('php://output', 'w');
-            // Write CSV header row first
             fputcsv($handle, ['student_name', 'student_email', 'cohort_name', 'experience_name', 'status', 'enrolled_at', 'removed_at']);
             foreach ($rows as $row) {
-                fputcsv($handle, $row);
+                fputcsv($handle, array_map(self::sanitizeCsvValue(...), $row));
             }
             fclose($handle);
         }, 'enrolments.csv', [

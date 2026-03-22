@@ -38,6 +38,7 @@ use App\Contracts\CourseDataProviderInterface;
 use App\Models\Experience;
 use App\Models\ExperienceCourse;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class ExperienceScreenService
 {
@@ -87,7 +88,7 @@ class ExperienceScreenService
                 $total = count($data);
             }
         } catch (\Exception $e) {
-            // Degraded response — return empty data on failure
+            Log::warning('Failed to fetch enrolled students', ['experience_id' => $experience->id, 'error' => $e->getMessage()]);
         }
 
         return [
@@ -125,7 +126,7 @@ class ExperienceScreenService
                 $rows = $this->flattenStudentCohortAssignments($students, includeStudentId: false);
             }
         } catch (\Exception $e) {
-            // Degraded — return empty export on failure
+            Log::warning('Failed to export student list', ['experience_id' => $experienceId, 'error' => $e->getMessage()]);
         }
 
         return $rows;
@@ -183,7 +184,7 @@ class ExperienceScreenService
                 }
             }
         } catch (\Exception $e) {
-            // Degraded — return null on failure (treated as not found)
+            Log::warning('Failed to fetch student detail', ['experience_id' => $experienceId, 'student_id' => $studentId, 'error' => $e->getMessage()]);
         }
 
         return null;
@@ -244,7 +245,7 @@ class ExperienceScreenService
                 $removedStudents = (int) $cohorts->sum('removed_count');
             }
         } catch (\Exception $e) {
-            // Degraded — use zeros on failure
+            Log::warning('Failed to fetch experience statistics', ['experience_id' => $experience->id, 'error' => $e->getMessage()]);
         }
 
         // Completion rate is a rough proxy when using mock providers: active students / total students.

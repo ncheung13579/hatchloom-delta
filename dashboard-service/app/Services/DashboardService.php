@@ -46,6 +46,7 @@ use App\Factories\DashboardWidgetFactory;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class DashboardService
 {
@@ -155,7 +156,7 @@ class DashboardService
                 return $response->json();
             }
         } catch (\Exception $e) {
-            // Degraded — fall through to warning
+            Log::warning('Cross-service call failed', ['url' => $url, 'error' => $e->getMessage()]);
         }
 
         $warnings[] = [
@@ -192,7 +193,7 @@ class DashboardService
                 ];
             }
         } catch (\Exception $e) {
-            // Degraded — return zero counts
+            Log::warning('Failed to fetch cohort counts', ['error' => $e->getMessage()]);
         }
 
         return $defaults;
@@ -241,7 +242,7 @@ class DashboardService
                 $enrolments = $response->json('enrolments', []);
             }
         } catch (\Exception $e) {
-            // Degraded response — no enrolment data, but student info still returned
+            Log::warning('Failed to fetch student enrolments', ['student_id' => $studentId, 'error' => $e->getMessage()]);
         }
 
         return [
@@ -423,8 +424,7 @@ class DashboardService
                 return $response->json('data', []);
             }
         } catch (\Exception $e) {
-            // Degraded — return empty array so widgets can still render
-            // with zero experience data rather than crashing
+            Log::warning('Failed to fetch experiences', ['error' => $e->getMessage()]);
         }
 
         return [];

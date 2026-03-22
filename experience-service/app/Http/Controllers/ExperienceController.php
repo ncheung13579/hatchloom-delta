@@ -38,6 +38,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class ExperienceController extends Controller
 {
@@ -70,7 +71,7 @@ class ExperienceController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $perPage = (int) $request->query('per_page', 15);
+        $perPage = min(max((int) $request->query('per_page', 15), 1), 100);
         $search = $request->query('search');
 
         // Service handles the paginated query; SchoolScope ensures tenant isolation automatically.
@@ -95,8 +96,7 @@ class ExperienceController extends Controller
                     ->map(fn($group) => $group->count());
             }
         } catch (\Exception $e) {
-            // Graceful degradation: cohort_count falls back to 0 for all experiences.
-            // This keeps the Experiences Dashboard functional even if the Enrolment Service is down.
+            Log::warning('Failed to fetch cohort counts from Enrolment Service', ['error' => $e->getMessage()]);
         }
 
         // Build the response payload — one flat object per experience.
@@ -151,9 +151,9 @@ class ExperienceController extends Controller
 
         // Step 1: Structural validation — Laravel handles type/format checks.
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'description' => 'required|string',
-            'course_ids' => 'required|array|min:1',    // At least one course required
+            'name' => ['required', 'string', 'max:255', 'regex:/\S/'],
+            'description' => 'required|string|max:5000',
+            'course_ids' => 'required|array|min:1',
             'course_ids.*' => 'required|integer',       // Each element must be an integer
         ]);
 
@@ -247,8 +247,7 @@ class ExperienceController extends Controller
                 ])->all();
             }
         } catch (\Exception $e) {
-            // Graceful degradation: return empty cohorts array.
-            // The frontend should handle this by showing a "cohort data unavailable" message.
+            Log::warning('Failed to fetch cohorts from Enrolment Service', ['experience_id' => $experience->id, 'error' => $e->getMessage()]);
         }
 
         return response()->json([
@@ -294,8 +293,8 @@ class ExperienceController extends Controller
         // 'sometimes' means the field is only validated if present in the request,
         // allowing partial updates without requiring every field to be sent.
         $validated = $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'description' => 'sometimes|string',
+            'name' => ['sometimes', 'string', 'max:255', 'regex:/\S/'],
+            'description' => 'sometimes|string|max:5000',
             'course_ids' => 'sometimes|array|min:1',
             'course_ids.*' => 'required|integer',
         ]);

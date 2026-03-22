@@ -625,6 +625,102 @@ class CohortTest extends TestCase
         $this->assertEquals('not_started', $data['status']);
     }
 
+    // ── Fix verification: whitespace-only name rejection ──────
+
+    public function test_create_cohort_with_whitespace_only_name_fails(): void
+    {
+        $response = $this->postJson('/api/school/cohorts', [
+            'experience_id' => $this->experience->id,
+            'name' => '   ',
+            'start_date' => '2026-04-01',
+            'end_date' => '2026-08-01',
+        ], $this->teacherAuthHeaders());
+
+        $response->assertStatus(422);
+    }
+
+    public function test_update_cohort_with_whitespace_only_name_fails(): void
+    {
+        $cohort = Cohort::create([
+            'experience_id' => $this->experience->id,
+            'school_id' => $this->school->id,
+            'name' => 'Valid Name',
+            'status' => 'not_started',
+            'start_date' => '2026-04-01',
+            'end_date' => '2026-08-01',
+        ]);
+
+        $response = $this->putJson("/api/school/cohorts/{$cohort->id}", [
+            'name' => '   ',
+        ], $this->teacherAuthHeaders());
+
+        $response->assertStatus(422);
+    }
+
+    public function test_create_cohort_with_tabs_only_name_fails(): void
+    {
+        $response = $this->postJson('/api/school/cohorts', [
+            'experience_id' => $this->experience->id,
+            'name' => "\t\t",
+            'start_date' => '2026-04-01',
+            'end_date' => '2026-08-01',
+        ], $this->teacherAuthHeaders());
+
+        $response->assertStatus(422);
+    }
+
+    // ── Fix verification: state transitions with transaction ──
+
+    public function test_activate_nonexistent_cohort_returns_404(): void
+    {
+        $response = $this->patchJson('/api/school/cohorts/9999/activate', [], $this->teacherAuthHeaders());
+
+        $response->assertStatus(404)
+            ->assertJsonFragment(['code' => 'NOT_FOUND']);
+    }
+
+    public function test_complete_nonexistent_cohort_returns_404(): void
+    {
+        $response = $this->patchJson('/api/school/cohorts/9999/complete', [], $this->teacherAuthHeaders());
+
+        $response->assertStatus(404)
+            ->assertJsonFragment(['code' => 'NOT_FOUND']);
+    }
+
+    public function test_activate_persists_status_change(): void
+    {
+        $cohort = Cohort::create([
+            'experience_id' => $this->experience->id,
+            'school_id' => $this->school->id,
+            'name' => 'Persist Check',
+            'status' => 'not_started',
+            'start_date' => '2026-04-01',
+            'end_date' => '2026-08-01',
+        ]);
+
+        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/activate", [], $this->teacherAuthHeaders());
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('cohorts', ['id' => $cohort->id, 'status' => 'active']);
+    }
+
+    public function test_complete_persists_status_change(): void
+    {
+        $cohort = Cohort::create([
+            'experience_id' => $this->experience->id,
+            'school_id' => $this->school->id,
+            'name' => 'Complete Check',
+            'status' => 'active',
+            'start_date' => '2026-02-01',
+            'end_date' => '2026-06-01',
+        ]);
+
+        $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/complete", [], $this->teacherAuthHeaders());
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('cohorts', ['id' => $cohort->id, 'status' => 'completed']);
+    }
+
     // ── Cohort show response completeness ─────────────────────
 
     /**

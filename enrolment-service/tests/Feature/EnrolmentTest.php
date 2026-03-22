@@ -1101,6 +1101,104 @@ class EnrolmentTest extends TestCase
     /**
      * Verify that the StudentRemoved event carries correct data including the removedAt timestamp.
      */
+    // ── Fix verification: per_page clamping ─────────────────
+
+    public function test_per_page_clamped_to_max_100(): void
+    {
+        $response = $this->getJson('/api/school/enrolments?per_page=500', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonPath('meta.per_page', 100);
+    }
+
+    public function test_per_page_clamped_to_min_1(): void
+    {
+        $response = $this->getJson('/api/school/enrolments?per_page=0', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonPath('meta.per_page', 1);
+    }
+
+    public function test_per_page_negative_clamped_to_1(): void
+    {
+        $response = $this->getJson('/api/school/enrolments?per_page=-5', $this->authHeaders());
+
+        $response->assertStatus(200)
+            ->assertJsonPath('meta.per_page', 1);
+    }
+
+    // ── Fix verification: CSV formula injection sanitization ──
+
+    public function test_csv_export_sanitizes_formula_injection(): void
+    {
+        // Create a student with a formula-injection name
+        $maliciousStudent = User::create([
+            'name' => '=CMD("calc")',
+            'email' => '+danger@school.test',
+            'password' => bcrypt('password'),
+            'role' => 'student',
+            'school_id' => $this->school->id,
+        ]);
+
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $maliciousStudent->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        $response = $this->get('/api/school/enrolments/export', $this->authHeaders());
+
+        $response->assertStatus(200);
+        $content = $response->streamedContent();
+
+        // The formula-prefix characters should be escaped with a leading apostrophe
+        $this->assertStringContainsString("'=CMD", $content);
+        $this->assertStringContainsString("'+danger@school.test", $content);
+    }
+
+    // ── Fix verification: transaction wrapping (enrol) ────────
+
+    public function test_enrol_uses_transaction_capacity_enforced(): void
+    {
+        // Create a cohort with capacity 1 and fill it
+        $tinyCohort = Cohort::create([
+            'experience_id' => $this->experience->id,
+            'school_id' => $this->school->id,
+            'name' => 'Tiny Cohort',
+            'status' => 'active',
+            'capacity' => 1,
+            'start_date' => '2026-02-01',
+            'end_date' => '2026-06-01',
+        ]);
+
+        CohortEnrolment::create([
+            'cohort_id' => $tinyCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        $student2 = User::create([
+            'name' => 'Student 2',
+            'email' => 'student2@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'student',
+            'school_id' => $this->school->id,
+        ]);
+
+        // This should fail — capacity is 1 and already full
+        $response = $this->postJson("/api/school/cohorts/{$tinyCohort->id}/enrolments", [
+            'student_id' => $student2->id,
+        ], $this->authHeaders());
+
+        $response->assertStatus(422)
+            ->assertJsonFragment(['message' => 'Cohort is at full capacity']);
+
+        // Verify only 1 enrolment exists
+        $this->assertEquals(1, CohortEnrolment::where('cohort_id', $tinyCohort->id)->count());
+    }
+
     public function test_student_removed_event_carries_correct_data_with_removed_at(): void
     {
         CohortEnrolment::create([

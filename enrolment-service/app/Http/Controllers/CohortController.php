@@ -27,11 +27,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Models\Cohort;
 use App\Models\Experience;
 use App\Services\CohortService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * REST controller for cohort management (CRUD + state transitions).
@@ -109,7 +111,7 @@ class CohortController extends Controller
 
         $validated = $request->validate([
             'experience_id' => 'required|integer|exists:experiences,id',
-            'name' => 'required|string|max:255',
+            'name' => ['required', 'string', 'max:255', 'regex:/\S/'],
             'start_date' => 'required|date|after_or_equal:today',
             'end_date' => 'required|date|after:start_date',
             'capacity' => 'nullable|integer|min:1',
@@ -174,7 +176,7 @@ class CohortController extends Controller
         }
 
         $validated = $request->validate([
-            'name' => 'sometimes|string|max:255',
+            'name' => ['sometimes', 'string', 'max:255', 'regex:/\S/'],
             'start_date' => 'sometimes|date',
             'end_date' => 'sometimes|date|after:start_date',
             'capacity' => 'sometimes|integer|min:1',
@@ -214,23 +216,23 @@ class CohortController extends Controller
             ], 403);
         }
 
-        $cohort = $this->cohortService->getCohort($id);
+        return DB::transaction(function () use ($id) {
+            $cohort = Cohort::lockForUpdate()->find($id);
 
-        if (!$cohort) {
-            return $this->notFoundResponse('Cohort not found');
-        }
+            if (!$cohort) {
+                return $this->notFoundResponse('Cohort not found');
+            }
 
-        // Inline: calls the Cohort model's State pattern directly.
-        // activateCohort() in CohortService was a pure pass-through (Middle Man).
-        if (!$cohort->activate()) {
-            return $this->errorResponse('Cohort is already active or completed', 'INVALID_STATE_TRANSITION', 409);
-        }
+            if (!$cohort->activate()) {
+                return $this->errorResponse('Cohort is already active or completed', 'INVALID_STATE_TRANSITION', 409);
+            }
 
-        return response()->json([
-            'id' => $cohort->id,
-            'name' => $cohort->name,
-            'status' => $cohort->status,
-        ]);
+            return response()->json([
+                'id' => $cohort->id,
+                'name' => $cohort->name,
+                'status' => $cohort->status,
+            ]);
+        });
     }
 
     /**
@@ -252,23 +254,23 @@ class CohortController extends Controller
             ], 403);
         }
 
-        $cohort = $this->cohortService->getCohort($id);
+        return DB::transaction(function () use ($id) {
+            $cohort = Cohort::lockForUpdate()->find($id);
 
-        if (!$cohort) {
-            return $this->notFoundResponse('Cohort not found');
-        }
+            if (!$cohort) {
+                return $this->notFoundResponse('Cohort not found');
+            }
 
-        // Inline: calls the Cohort model's State pattern directly.
-        // completeCohort() in CohortService was a pure pass-through (Middle Man).
-        if (!$cohort->complete()) {
-            return $this->errorResponse('Cohort must be active to complete', 'INVALID_STATE_TRANSITION', 409);
-        }
+            if (!$cohort->complete()) {
+                return $this->errorResponse('Cohort must be active to complete', 'INVALID_STATE_TRANSITION', 409);
+            }
 
-        return response()->json([
-            'id' => $cohort->id,
-            'name' => $cohort->name,
-            'status' => $cohort->status,
-        ]);
+            return response()->json([
+                'id' => $cohort->id,
+                'name' => $cohort->name,
+                'status' => $cohort->status,
+            ]);
+        });
     }
 
     /**

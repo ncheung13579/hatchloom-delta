@@ -8,6 +8,7 @@ use App\Models\School;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 class DashboardTest extends TestCase
@@ -955,6 +956,43 @@ class DashboardTest extends TestCase
         ]);
 
         $response->assertStatus(403);
+    }
+
+    // ── Fix verification: exception logging on service failure ──
+
+    public function test_dashboard_logs_warning_on_service_failure(): void
+    {
+        Log::shouldReceive('warning')
+            ->atLeast()->times(1);
+
+        Http::fake([
+            '*' => function () {
+                throw new \Illuminate\Http\Client\ConnectionException('Connection refused');
+            },
+        ]);
+
+        $response = $this->getJson('/api/school/dashboard', $this->authHeaders());
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $warningTypes = array_column($data['warnings'], 'type');
+        $this->assertContains('service_degraded', $warningTypes);
+    }
+
+    public function test_dashboard_logs_warning_on_connection_timeout(): void
+    {
+        Log::shouldReceive('warning')
+            ->atLeast()->times(1);
+
+        Http::fake([
+            '*' => function () {
+                throw new \Illuminate\Http\Client\ConnectionException('Connection timed out');
+            },
+        ]);
+
+        $response = $this->getJson('/api/school/dashboard', $this->authHeaders());
+
+        $response->assertStatus(200);
     }
 
     /**
