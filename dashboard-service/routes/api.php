@@ -33,6 +33,8 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\DashboardController;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 
 // All dashboard routes live under /api/school/ to match the URL convention
@@ -40,13 +42,47 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('school')->group(function () {
 
     // Health check endpoint — no authentication required.
-    // Used by Docker health checks and the other microservices to verify
-    // this service is running. Returns a simple JSON with status and timestamp.
-    Route::get('dashboard/health', fn() => response()->json([
-        'status' => 'ok',
-        'service' => 'dashboard',
-        'timestamp' => now()->toIso8601String(),
-    ]));
+    // Performs a real database connectivity check and pings downstream services.
+    // Returns "degraded" if any downstream is unreachable, 503 if DB is down.
+    Route::get('dashboard/health', function () {
+        $database = 'connected';
+        $status = 'ok';
+        $httpStatus = 200;
+        $downstream = [];
+
+        try {
+            DB::connection()->getPdo();
+        } catch (\Exception $e) {
+            $database = 'unreachable';
+            $status = 'error';
+            $httpStatus = 503;
+        }
+
+        $services = [
+            'experience-service' => config('services.experience.url') . '/api/school/experiences/health',
+            'enrolment-service' => config('services.enrolment.url') . '/api/school/enrolments/health',
+        ];
+
+        foreach ($services as $name => $url) {
+            try {
+                $response = Http::timeout(2)->get($url);
+                $downstream[$name] = $response->successful() ? 'reachable' : 'unreachable';
+            } catch (\Exception $e) {
+                $downstream[$name] = 'unreachable';
+                if ($status === 'ok') {
+                    $status = 'degraded';
+                }
+            }
+        }
+
+        return response()->json([
+            'status' => $status,
+            'service' => 'dashboard',
+            'timestamp' => now()->toIso8601String(),
+            'database' => $database,
+            'downstream' => $downstream,
+        ], $httpStatus);
+    });
 
     // School-wide dashboard endpoints — admin and teacher only.
     // These return aggregated data across all students/cohorts in the school,

@@ -60,6 +60,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\CohortController;
 use App\Http\Controllers\EnrolmentController;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 // All routes are prefixed with /school to namespace the Enrolment Service's
@@ -68,11 +69,27 @@ Route::prefix('school')->group(function () {
 
     // Health check — intentionally outside the auth middleware so Docker
     // health probes and load balancers can reach it without a token.
-    Route::get('enrolments/health', fn() => response()->json([
-        'status' => 'ok',
-        'service' => 'enrolment',
-        'timestamp' => now()->toIso8601String(),
-    ]));
+    // Performs a real database connectivity check and returns 503 if unreachable.
+    Route::get('enrolments/health', function () {
+        $database = 'connected';
+        $status = 'ok';
+        $httpStatus = 200;
+
+        try {
+            DB::connection()->getPdo();
+        } catch (\Exception $e) {
+            $database = 'unreachable';
+            $status = 'error';
+            $httpStatus = 503;
+        }
+
+        return response()->json([
+            'status' => $status,
+            'service' => 'enrolment',
+            'timestamp' => now()->toIso8601String(),
+            'database' => $database,
+        ], $httpStatus);
+    });
 
     // Read-only endpoints — accessible by admins, teachers, students, and parents.
     // Students see only their own data (auto-filtered by EnrolmentService).

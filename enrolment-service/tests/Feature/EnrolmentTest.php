@@ -1127,12 +1127,11 @@ class EnrolmentTest extends TestCase
             ->assertJsonPath('meta.per_page', 1);
     }
 
-    // ── Fix verification: CSV formula injection sanitization ──
+    // ── CSV data integrity: values exported verbatim ──────────
 
-    public function test_csv_export_sanitizes_formula_injection(): void
+    public function test_csv_export_preserves_data_verbatim(): void
     {
-        // Create a student with a formula-injection name
-        $maliciousStudent = User::create([
+        $student = User::create([
             'name' => '=CMD("calc")',
             'email' => '+danger@school.test',
             'password' => bcrypt('password'),
@@ -1142,7 +1141,7 @@ class EnrolmentTest extends TestCase
 
         CohortEnrolment::create([
             'cohort_id' => $this->activeCohort->id,
-            'student_id' => $maliciousStudent->id,
+            'student_id' => $student->id,
             'status' => 'enrolled',
             'enrolled_at' => now(),
         ]);
@@ -1152,9 +1151,13 @@ class EnrolmentTest extends TestCase
         $response->assertStatus(200);
         $content = $response->streamedContent();
 
-        // The formula-prefix characters should be escaped with a leading apostrophe
-        $this->assertStringContainsString("'=CMD", $content);
-        $this->assertStringContainsString("'+danger@school.test", $content);
+        // Values must be exported exactly as stored — no mutation
+        // fputcsv doubles internal quotes: "calc" → ""calc"" in CSV format
+        $this->assertStringContainsString('=CMD(""calc"")', $content);
+        $this->assertStringContainsString('+danger@school.test', $content);
+        // Verify no apostrophe prefix was added
+        $this->assertStringNotContainsString("'=CMD", $content);
+        $this->assertStringNotContainsString("'+danger", $content);
     }
 
     // ── Fix verification: transaction wrapping (enrol) ────────

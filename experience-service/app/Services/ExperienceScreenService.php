@@ -172,7 +172,7 @@ class ExperienceScreenService
                             'experience_id' => $experienceId,
                             'cohort_id' => $assignment['cohort_id'],
                             'cohort_name' => $assignment['cohort_name'] ?? '',
-                            'status' => $assignment['status'] ?? 'enrolled',
+                            'status' => $assignment['status'] ?? 'unknown',
                             'enrolled_at' => $assignment['enrolled_at'] ?? '',
                             'credits' => [
                                 'earned' => 0,     // Stub — will come from credential engine when integrated
@@ -288,7 +288,7 @@ class ExperienceScreenService
                     'student_name' => $student['name'] ?? 'Unknown',
                     'student_email' => $student['email'] ?? '',
                     'cohort_name' => $assignment['cohort_name'] ?? '',
-                    'status' => $assignment['status'] ?? 'enrolled',
+                    'status' => $assignment['status'] ?? 'unknown',
                     'enrolled_at' => $assignment['enrolled_at'] ?? '',
                 ];
 

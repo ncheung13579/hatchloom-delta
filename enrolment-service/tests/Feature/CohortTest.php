@@ -780,4 +780,67 @@ class CohortTest extends TestCase
         $response->assertStatus(200);
         $this->assertEmpty($response->json('data'));
     }
+
+    // ── Deep health check ─────────────────────────────────────
+
+    /**
+     * Verify that the health endpoint checks database connectivity.
+     */
+    public function test_health_endpoint_includes_database_status(): void
+    {
+        $response = $this->getJson('/api/school/enrolments/health');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure(['status', 'service', 'timestamp', 'database'])
+            ->assertJson([
+                'status' => 'ok',
+                'service' => 'enrolment',
+                'database' => 'connected',
+            ]);
+    }
+
+    // ── Security headers ───────────────────────────────────────
+
+    /**
+     * Verify that all API responses include Content-Security-Policy,
+     * X-Content-Type-Options, and X-Frame-Options headers.
+     */
+    public function test_api_responses_include_security_headers(): void
+    {
+        $response = $this->getJson('/api/school/enrolments/health');
+
+        $response->assertHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+        $response->assertHeader('X-Content-Type-Options', 'nosniff');
+        $response->assertHeader('X-Frame-Options', 'DENY');
+    }
+
+    // ── Global exception handler ──────────────────────────────
+
+    /**
+     * Verify that hitting a nonexistent route returns a JSON error envelope.
+     */
+    public function test_nonexistent_route_returns_json_404(): void
+    {
+        $response = $this->getJson('/api/school/nonexistent', $this->authHeaders());
+
+        $response->assertStatus(404)
+            ->assertJson([
+                'error' => true,
+                'code' => 'NOT_FOUND',
+            ]);
+    }
+
+    /**
+     * Verify that wrong HTTP method returns a JSON 405 error.
+     */
+    public function test_wrong_http_method_returns_json_405(): void
+    {
+        $response = $this->deleteJson('/api/school/cohorts', [], $this->authHeaders());
+
+        $response->assertStatus(405)
+            ->assertJson([
+                'error' => true,
+                'code' => 'METHOD_NOT_ALLOWED',
+            ]);
+    }
 }

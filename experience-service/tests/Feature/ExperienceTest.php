@@ -939,9 +939,9 @@ class ExperienceTest extends TestCase
         $response->assertStatus(201);
     }
 
-    // ── Fix verification: CSV formula injection sanitization ──
+    // ── CSV data integrity: values exported verbatim ──────────
 
-    public function test_csv_export_sanitizes_formula_injection(): void
+    public function test_csv_export_preserves_data_verbatim(): void
     {
         Http::fake([
             '*/api/school/enrolments*' => Http::response([
@@ -972,10 +972,15 @@ class ExperienceTest extends TestCase
         $response->assertStatus(200);
         $content = $response->streamedContent();
 
-        // Formula-prefix characters should be escaped with a leading apostrophe
-        $this->assertStringContainsString("'=CMD", $content);
-        $this->assertStringContainsString("'+danger@school.test", $content);
-        $this->assertStringContainsString("'-Malicious Cohort", $content);
+        // Values must be exported exactly as stored — no mutation
+        // fputcsv doubles internal quotes: "calc" → ""calc"" in CSV format
+        $this->assertStringContainsString('=CMD(""calc"")', $content);
+        $this->assertStringContainsString('+danger@school.test', $content);
+        $this->assertStringContainsString('-Malicious Cohort', $content);
+        // Verify no apostrophe prefix was added
+        $this->assertStringNotContainsString("'=CMD", $content);
+        $this->assertStringNotContainsString("'+danger", $content);
+        $this->assertStringNotContainsString("'-Malicious", $content);
     }
 
     // ── Fix verification: experience students per_page clamping ──
@@ -1040,5 +1045,95 @@ class ExperienceTest extends TestCase
         // Verify the archived one is NOT in the response
         $names = array_column($response->json('data'), 'name');
         $this->assertNotContains('Will Be Archived', $names);
+    }
+
+    // ── Deep health check ─────────────────────────────────────
+
+    /**
+     * Verify that the health endpoint checks database connectivity.
+     */
+    public function test_health_endpoint_includes_database_and_downstream(): void
+    {
+        Http::fake([
+            '*/enrolments/health' => Http::response(['status' => 'ok']),
+        ]);
+
+        $response = $this->getJson('/api/school/experiences/health');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure(['status', 'service', 'timestamp', 'database', 'downstream'])
+            ->assertJson([
+                'status' => 'ok',
+                'service' => 'experience',
+                'database' => 'connected',
+            ]);
+    }
+
+    /**
+     * Verify that health returns degraded when downstream is unreachable.
+     */
+    public function test_health_returns_degraded_when_downstream_unreachable(): void
+    {
+        Http::fake([
+            '*/enrolments/health' => function () {
+                throw new \Illuminate\Http\Client\ConnectionException('Connection refused');
+            },
+        ]);
+
+        $response = $this->getJson('/api/school/experiences/health');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'degraded',
+                'database' => 'connected',
+            ])
+            ->assertJsonPath('downstream.enrolment-service', 'unreachable');
+    }
+
+    // ── Security headers ───────────────────────────────────────
+
+    /**
+     * Verify that all API responses include Content-Security-Policy,
+     * X-Content-Type-Options, and X-Frame-Options headers.
+     */
+    public function test_api_responses_include_security_headers(): void
+    {
+        Http::fake(['*' => Http::response(['status' => 'ok'])]);
+
+        $response = $this->getJson('/api/school/experiences/health');
+
+        $response->assertHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+        $response->assertHeader('X-Content-Type-Options', 'nosniff');
+        $response->assertHeader('X-Frame-Options', 'DENY');
+    }
+
+    // ── Global exception handler ──────────────────────────────
+
+    /**
+     * Verify that hitting a nonexistent route returns a JSON error envelope.
+     */
+    public function test_nonexistent_route_returns_json_404(): void
+    {
+        $response = $this->getJson('/api/school/nonexistent', $this->authHeaders());
+
+        $response->assertStatus(404)
+            ->assertJson([
+                'error' => true,
+                'code' => 'NOT_FOUND',
+            ]);
+    }
+
+    /**
+     * Verify that wrong HTTP method returns a JSON 405 error.
+     */
+    public function test_wrong_http_method_returns_json_405(): void
+    {
+        $response = $this->deleteJson('/api/school/experiences', [], $this->authHeaders());
+
+        $response->assertStatus(405)
+            ->assertJson([
+                'error' => true,
+                'code' => 'METHOD_NOT_ALLOWED',
+            ]);
     }
 }

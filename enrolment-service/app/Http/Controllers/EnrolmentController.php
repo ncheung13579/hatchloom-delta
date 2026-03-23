@@ -225,9 +225,6 @@ class EnrolmentController extends Controller
         if ($value === null) {
             return '';
         }
-        if (preg_match('/^[=+\-@\t\r]/', $value)) {
-            return "'" . $value;
-        }
         return $value;
     }
 

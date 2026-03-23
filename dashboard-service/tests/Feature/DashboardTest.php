@@ -1008,4 +1008,99 @@ class DashboardTest extends TestCase
 
         $response->assertStatus(403);
     }
+
+    // ── Deep health check ─────────────────────────────────────
+
+    /**
+     * Verify that the health endpoint checks database connectivity and downstream services.
+     */
+    public function test_health_endpoint_includes_database_and_downstream(): void
+    {
+        Http::fake([
+            '*/experiences/health' => Http::response(['status' => 'ok']),
+            '*/enrolments/health' => Http::response(['status' => 'ok']),
+        ]);
+
+        $response = $this->getJson('/api/school/dashboard/health');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure(['status', 'service', 'timestamp', 'database', 'downstream'])
+            ->assertJson([
+                'status' => 'ok',
+                'service' => 'dashboard',
+                'database' => 'connected',
+            ])
+            ->assertJsonPath('downstream.experience-service', 'reachable')
+            ->assertJsonPath('downstream.enrolment-service', 'reachable');
+    }
+
+    /**
+     * Verify that health returns degraded when a downstream service is unreachable.
+     */
+    public function test_health_returns_degraded_when_downstream_unreachable(): void
+    {
+        Http::fake([
+            '*/experiences/health' => Http::response(['status' => 'ok']),
+            '*/enrolments/health' => function () {
+                throw new \Illuminate\Http\Client\ConnectionException('Connection refused');
+            },
+        ]);
+
+        $response = $this->getJson('/api/school/dashboard/health');
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'status' => 'degraded',
+                'database' => 'connected',
+            ])
+            ->assertJsonPath('downstream.experience-service', 'reachable')
+            ->assertJsonPath('downstream.enrolment-service', 'unreachable');
+    }
+
+    // ── Security headers ───────────────────────────────────────
+
+    /**
+     * Verify that all API responses include Content-Security-Policy,
+     * X-Content-Type-Options, and X-Frame-Options headers.
+     */
+    public function test_api_responses_include_security_headers(): void
+    {
+        Http::fake(['*' => Http::response(['status' => 'ok'])]);
+
+        $response = $this->getJson('/api/school/dashboard/health');
+
+        $response->assertHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+        $response->assertHeader('X-Content-Type-Options', 'nosniff');
+        $response->assertHeader('X-Frame-Options', 'DENY');
+    }
+
+    // ── Global exception handler ──────────────────────────────
+
+    /**
+     * Verify that hitting a nonexistent route returns a JSON error envelope.
+     */
+    public function test_nonexistent_route_returns_json_404(): void
+    {
+        $response = $this->getJson('/api/school/nonexistent', $this->authHeaders());
+
+        $response->assertStatus(404)
+            ->assertJson([
+                'error' => true,
+                'code' => 'NOT_FOUND',
+            ]);
+    }
+
+    /**
+     * Verify that wrong HTTP method returns a JSON 405 error.
+     */
+    public function test_wrong_http_method_returns_json_405(): void
+    {
+        $response = $this->deleteJson('/api/school/dashboard', [], $this->authHeaders());
+
+        $response->assertStatus(405)
+            ->assertJson([
+                'error' => true,
+                'code' => 'METHOD_NOT_ALLOWED',
+            ]);
+    }
 }

@@ -4,7 +4,10 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -17,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'mock.auth' => \App\Http\Middleware\MockAuthMiddleware::class,
         ]);
         $middleware->appendToGroup('api', [
+            \App\Http\Middleware\SecurityHeadersMiddleware::class,
             \App\Http\Middleware\AuditLogMiddleware::class,
         ]);
     })
@@ -30,5 +34,35 @@ return Application::configure(basePath: dirname(__DIR__))
                 'code' => 'VALIDATION_ERROR',
                 'errors' => $e->errors(),
             ], $e->status);
+        });
+
+        $exceptions->renderable(function (NotFoundHttpException $e, Request $request) {
+            return response()->json([
+                'error' => true,
+                'message' => 'The requested resource was not found',
+                'code' => 'NOT_FOUND',
+            ], 404);
+        });
+
+        $exceptions->renderable(function (MethodNotAllowedHttpException $e, Request $request) {
+            return response()->json([
+                'error' => true,
+                'message' => 'HTTP method not allowed',
+                'code' => 'METHOD_NOT_ALLOWED',
+            ], 405);
+        });
+
+        $exceptions->renderable(function (\Throwable $e, Request $request) {
+            Log::error('Unhandled exception', [
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+                'uri' => $request->getRequestUri(),
+            ]);
+
+            return response()->json([
+                'error' => true,
+                'message' => 'An internal server error occurred',
+                'code' => 'SERVER_ERROR',
+            ], 500);
         });
     })->create();

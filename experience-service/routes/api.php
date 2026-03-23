@@ -37,17 +37,46 @@ declare(strict_types=1);
 
 use App\Http\Controllers\ExperienceController;
 use App\Http\Controllers\ExperienceScreenController;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('school')->group(function () {
-    // Health check — no auth required. Used by Docker HEALTHCHECK and load balancers
-    // to verify the service is running. Returns a simple JSON payload with the service
-    // name and current timestamp.
-    Route::get('experiences/health', fn() => response()->json([
-        'status' => 'ok',
-        'service' => 'experience',
-        'timestamp' => now()->toIso8601String(),
-    ]));
+    // Health check — no auth required. Used by Docker HEALTHCHECK and load balancers.
+    // Performs a real database connectivity check and pings the downstream Enrolment
+    // Service. Returns "degraded" if downstream is unreachable, 503 if DB is down.
+    Route::get('experiences/health', function () {
+        $database = 'connected';
+        $status = 'ok';
+        $httpStatus = 200;
+        $downstream = [];
+
+        try {
+            DB::connection()->getPdo();
+        } catch (\Exception $e) {
+            $database = 'unreachable';
+            $status = 'error';
+            $httpStatus = 503;
+        }
+
+        try {
+            $response = Http::timeout(2)->get(config('services.enrolment.url') . '/api/school/enrolments/health');
+            $downstream['enrolment-service'] = $response->successful() ? 'reachable' : 'unreachable';
+        } catch (\Exception $e) {
+            $downstream['enrolment-service'] = 'unreachable';
+            if ($status === 'ok') {
+                $status = 'degraded';
+            }
+        }
+
+        return response()->json([
+            'status' => $status,
+            'service' => 'experience',
+            'timestamp' => now()->toIso8601String(),
+            'database' => $database,
+            'downstream' => $downstream,
+        ], $httpStatus);
+    });
 
     // All routes inside this group require a valid bearer token (mock auth for development).
     // The middleware alias 'mock.auth' is registered in the application's kernel/bootstrap.
