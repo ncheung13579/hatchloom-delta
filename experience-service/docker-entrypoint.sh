@@ -21,5 +21,8 @@ for attempt in 1 2 3 4 5; do
     sleep 3
 done
 
+echo "Caching configuration..."
+php artisan config:cache
+
 echo "Starting Experience Service on port 8002..."
 exec php artisan serve --host=0.0.0.0 --port=8002

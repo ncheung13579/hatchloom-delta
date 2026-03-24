@@ -62,30 +62,25 @@ class ExperienceScreenService
         $token = request()->bearerToken();
         $data = [];
         $total = 0;
+        $meta = null;
 
         try {
+            // Delegate filtering and pagination to the Enrolment Service instead of
+            // fetching all students and filtering client-side.
+            $queryParams = ['experience_id' => $experience->id, 'per_page' => $perPage];
+            if ($search) {
+                $queryParams['search'] = $search;
+            }
+
             $enrolmentResponse = Http::withToken($token)
                 ->timeout(5)
-                ->get(config('services.enrolment.url') . '/api/school/enrolments', [
-                    'experience_id' => $experience->id,
-                ]);
+                ->get(config('services.enrolment.url') . '/api/school/enrolments', $queryParams);
 
             if ($enrolmentResponse->successful()) {
                 $students = collect($enrolmentResponse->json('data', []));
-
-                // Filter by student name/email when a search term is provided.
-                if ($search) {
-                    $searchLower = mb_strtolower($search);
-                    $students = $students->filter(function (array $student) use ($searchLower): bool {
-                        $name = mb_strtolower($student['name'] ?? '');
-                        $email = mb_strtolower($student['email'] ?? '');
-                        return str_contains($name, $searchLower)
-                            || str_contains($email, $searchLower);
-                    });
-                }
-
                 $data = $this->flattenStudentCohortAssignments($students, includeStudentId: true);
-                $total = count($data);
+                $meta = $enrolmentResponse->json('meta');
+                $total = $meta['total'] ?? count($data);
             }
         } catch (\Exception $e) {
             Log::warning('Failed to fetch enrolled students', ['experience_id' => $experience->id, 'error' => $e->getMessage()]);
@@ -93,7 +88,7 @@ class ExperienceScreenService
 
         return [
             'data' => $data,
-            'meta' => [
+            'meta' => $meta ?? [
                 'current_page' => 1,
                 'last_page' => 1,
                 'per_page' => $perPage,
@@ -197,9 +192,12 @@ class ExperienceScreenService
      */
     public function getContentsAndDelivery(Experience $experience): array
     {
+        $courseIds = $experience->courses->pluck('course_id')->all();
+        $courseMap = collect($this->courseDataProvider->getCoursesByIds($courseIds))->keyBy('id');
+
         $courses = [];
         foreach ($experience->courses as $expCourse) {
-            $courseData = $this->courseDataProvider->getCourse($expCourse->course_id);
+            $courseData = $courseMap->get($expCourse->course_id);
             if ($courseData) {
                 $courses[] = [
                     'id' => $courseData['id'],

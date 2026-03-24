@@ -59,7 +59,9 @@ class CohortService
      */
     public function listCohorts(?int $experienceId = null, ?string $status = null, ?string $search = null): Collection
     {
-        $query = Cohort::query()->with(['experience', 'teacher']);
+        $query = Cohort::query()
+            ->with(['experience', 'teacher'])
+            ->withCount(['activeEnrolments', 'removedEnrolments']);
 
         if ($experienceId) {
             $query->where('experience_id', $experienceId);
@@ -84,7 +86,9 @@ class CohortService
      */
     public function getCohort(int $id): ?Cohort
     {
-        return Cohort::with(['experience', 'teacher', 'enrolments'])->find($id);
+        return Cohort::with(['experience', 'teacher', 'enrolments'])
+            ->withCount(['activeEnrolments', 'removedEnrolments'])
+            ->find($id);
     }
 
     /**

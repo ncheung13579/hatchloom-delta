@@ -90,18 +90,47 @@ class DashboardService
 
         $warnings = [];
 
-        // Fetch data from downstream services with graceful degradation
-        $experienceData = $this->fetchServiceData(
-            config('services.experience.url') . '/api/school/experiences',
-            $token, 'Experience service is unavailable', $warnings
-        );
+        // Fire all three downstream HTTP calls concurrently. Each call is
+        // independent, so parallelizing eliminates ~160ms of sequential wait
+        // (3 × ~80ms reduced to 1 × ~80ms, limited by the slowest response).
+        $responses = Http::pool(fn ($pool) => [
+            $pool->as('experiences')->withToken($token)->timeout(5)
+                ->get(config('services.experience.url') . '/api/school/experiences'),
+            $pool->as('enrolmentStats')->withToken($token)->timeout(5)
+                ->get(config('services.enrolment.url') . '/api/school/enrolments/statistics'),
+            $pool->as('cohorts')->withToken($token)->timeout(5)
+                ->get(config('services.enrolment.url') . '/api/school/cohorts'),
+        ]);
 
-        $enrolmentStats = $this->fetchServiceData(
-            config('services.enrolment.url') . '/api/school/enrolments/statistics',
-            $token, 'Enrolment service is unavailable', $warnings
-        );
+        // Parse each response with graceful degradation on failure.
+        $experienceData = null;
+        if ($responses['experiences'] instanceof \Illuminate\Http\Client\Response && $responses['experiences']->successful()) {
+            $experienceData = $responses['experiences']->json();
+        } else {
+            Log::warning('Cross-service call failed', ['url' => 'experiences']);
+            $warnings[] = ['type' => 'service_degraded', 'message' => 'Experience service is unavailable', 'severity' => 'warning'];
+        }
 
-        $cohortCounts = $this->fetchCohortCounts($token);
+        $enrolmentStats = null;
+        if ($responses['enrolmentStats'] instanceof \Illuminate\Http\Client\Response && $responses['enrolmentStats']->successful()) {
+            $enrolmentStats = $responses['enrolmentStats']->json();
+        } else {
+            Log::warning('Cross-service call failed', ['url' => 'enrolmentStats']);
+            $warnings[] = ['type' => 'service_degraded', 'message' => 'Enrolment service is unavailable', 'severity' => 'warning'];
+        }
+
+        $cohortCounts = ['active' => 0, 'completed' => 0, 'upcoming' => 0, 'total' => 0];
+        if ($responses['cohorts'] instanceof \Illuminate\Http\Client\Response && $responses['cohorts']->successful()) {
+            $cohorts = collect($responses['cohorts']->json('data', []));
+            $cohortCounts = [
+                'active' => $cohorts->where('status', 'active')->count(),
+                'completed' => $cohorts->where('status', 'completed')->count(),
+                'upcoming' => $cohorts->where('status', 'not_started')->count(),
+                'total' => $cohorts->count(),
+            ];
+        } else {
+            Log::warning('Cross-service call failed', ['url' => 'cohorts']);
+        }
 
         // Merge downstream warnings into our top-level warnings array
         if ($enrolmentStats && isset($enrolmentStats['warnings'])) {

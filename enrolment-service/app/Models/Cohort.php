@@ -206,14 +206,14 @@ class Cohort extends Model
     }
 
     /**
-     * Count enrolments with status 'removed' for this cohort.
+     * Only the removed enrolments for this cohort.
      *
-     * Used in the cohort list and detail views to show admins how many students
-     * were removed, providing visibility into cohort churn.
+     * Used with withCount() to batch-load removed counts across multiple cohorts
+     * in a single query, avoiding the N+1 pattern in cohort listings.
      */
-    public function removedCount(): int
+    public function removedEnrolments(): HasMany
     {
-        return $this->enrolments()->where('status', 'removed')->count();
+        return $this->hasMany(CohortEnrolment::class)->where('status', 'removed');
     }
 
     /**
@@ -231,8 +231,8 @@ class Cohort extends Model
             'experience_id' => $this->experience_id,
             'status' => $this->status,
             'teacher_name' => $this->teacher?->name,
-            'student_count' => $this->activeEnrolments()->count(),
-            'removed_count' => $this->removedCount(),
+            'student_count' => $this->active_enrolments_count ?? $this->activeEnrolments()->count(),
+            'removed_count' => $this->removed_enrolments_count ?? $this->removedEnrolments()->count(),
             'capacity' => $this->capacity,
             'start_date' => $this->start_date?->format('Y-m-d'),
             'end_date' => $this->end_date?->format('Y-m-d'),

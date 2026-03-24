@@ -94,13 +94,11 @@ class ExperienceService
             'created_by' => Auth::id(),
         ]);
 
-        foreach ($data['course_ids'] as $sequence => $courseId) {
-            ExperienceCourse::create([
-                'experience_id' => $experience->id,
-                'course_id' => $courseId,
-                'sequence' => $sequence + 1,
-            ]);
-        }
+        ExperienceCourse::insert(array_map(fn($courseId, $index) => [
+            'experience_id' => $experience->id,
+            'course_id' => $courseId,
+            'sequence' => $index + 1,
+        ], $data['course_ids'], array_keys($data['course_ids'])));
 
         return $experience->load('courses');
     }
@@ -124,13 +122,11 @@ class ExperienceService
 
         if (isset($data['course_ids'])) {
             $experience->courses()->delete();
-            foreach ($data['course_ids'] as $sequence => $courseId) {
-                ExperienceCourse::create([
-                    'experience_id' => $experience->id,
-                    'course_id' => $courseId,
-                    'sequence' => $sequence + 1,
-                ]);
-            }
+            ExperienceCourse::insert(array_map(fn($courseId, $index) => [
+                'experience_id' => $experience->id,
+                'course_id' => $courseId,
+                'sequence' => $index + 1,
+            ], $data['course_ids'], array_keys($data['course_ids'])));
         }
 
         return $experience->load('courses');

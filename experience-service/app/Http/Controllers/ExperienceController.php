@@ -170,10 +170,12 @@ class ExperienceController extends Controller
 
         $experience = $this->experienceService->createExperience($validated);
 
-        // Enrich the response with human-readable course names resolved from the provider.
+        // Batch-resolve course names from the provider in a single call.
+        $courseIds = $experience->courses->pluck('course_id')->all();
+        $courseMap = collect($this->courseDataProvider->getCoursesByIds($courseIds))->keyBy('id');
         $courses = $experience->courses->map(fn($c) => [
             'id' => $c->course_id,
-            'name' => $this->courseDataProvider->getCourse($c->course_id)['name'] ?? 'Unknown',
+            'name' => $courseMap->get($c->course_id)['name'] ?? 'Unknown',
             'sequence' => $c->sequence,
         ]);
 
@@ -218,10 +220,12 @@ class ExperienceController extends Controller
             ], 404);
         }
 
-        // Resolve course names from the provider (mock or real).
+        // Batch-resolve course names from the provider in a single call.
+        $courseIds = $experience->courses->pluck('course_id')->all();
+        $courseMap = collect($this->courseDataProvider->getCoursesByIds($courseIds))->keyBy('id');
         $courses = $experience->courses->map(fn($c) => [
             'id' => $c->course_id,
-            'name' => $this->courseDataProvider->getCourse($c->course_id)['name'] ?? 'Unknown',
+            'name' => $courseMap->get($c->course_id)['name'] ?? 'Unknown',
             'sequence' => $c->sequence,
         ]);
 

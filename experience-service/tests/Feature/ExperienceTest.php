@@ -368,12 +368,14 @@ class ExperienceTest extends TestCase
 
     public function test_can_search_students_in_experience(): void
     {
+        // Search filtering is now delegated server-side to the Enrolment Service,
+        // so the mock returns only the matching student (as the real service would).
         Http::fake([
             '*/api/school/enrolments*' => Http::response([
                 'data' => [
                     ['student_id' => 10, 'name' => 'Alice Alpha', 'email' => 'alice@test.com', 'cohort_assignments' => [['cohort_id' => 1, 'cohort_name' => 'Cohort Alpha', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01']], 'assignment_status' => 'assigned'],
-                    ['student_id' => 11, 'name' => 'Bob Beta', 'email' => 'bob@test.com', 'cohort_assignments' => [['cohort_id' => 2, 'cohort_name' => 'Cohort Beta', 'status' => 'enrolled', 'enrolled_at' => '2026-03-01']], 'assignment_status' => 'assigned'],
                 ],
+                'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 1],
             ]),
         ]);
 

@@ -133,8 +133,16 @@ class EnrolmentService
 
         $students = $query->paginate($perPage);
 
-        $students->getCollection()->transform(function (User $student) {
-            return $this->transformStudentWithAssignments($student);
+        // Batch-load all enrolments for students on this page in a single query,
+        // avoiding the N+1 pattern of querying enrolments per student individually.
+        $studentIds = $students->getCollection()->pluck('id');
+        $allEnrolments = CohortEnrolment::whereIn('student_id', $studentIds)
+            ->with(['cohort.experience'])
+            ->get()
+            ->groupBy('student_id');
+
+        $students->getCollection()->transform(function (User $student) use ($allEnrolments) {
+            return $this->transformStudentWithAssignments($student, $allEnrolments->get($student->id, collect()));
         });
 
         return $students;
@@ -147,12 +155,8 @@ class EnrolmentService
      * flat array with cohort/experience names, and computes the aggregate
      * assignment_status that summarises the student's overall enrolment state.
      */
-    private function transformStudentWithAssignments(User $student): array
+    private function transformStudentWithAssignments(User $student, \Illuminate\Support\Collection $enrolments): array
     {
-        $enrolments = CohortEnrolment::where('student_id', $student->id)
-            ->with(['cohort.experience'])
-            ->get();
-
         $assignments = $enrolments->map(fn(CohortEnrolment $e) => [
             'cohort_id' => $e->cohort_id,
             'cohort_name' => $e->cohort?->name,
@@ -177,7 +181,7 @@ class EnrolmentService
      * Returns 'assigned' if the student has an active enrolment in an active cohort,
      * 'removed' if all enrolments are removed, or 'not_assigned' otherwise.
      */
-    private function determineAssignmentStatus(\Illuminate\Database\Eloquent\Collection $enrolments): string
+    private function determineAssignmentStatus(\Illuminate\Support\Collection $enrolments): string
     {
         $hasActiveEnrolment = $enrolments->contains(function (CohortEnrolment $e) {
             return $e->status === 'enrolled' && $e->cohort && $e->cohort->status === 'active';
