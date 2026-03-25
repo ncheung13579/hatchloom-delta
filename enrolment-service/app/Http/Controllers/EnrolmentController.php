@@ -99,9 +99,13 @@ class EnrolmentController extends Controller
         $user = Auth::user();
         if ($user->role === 'student') {
             $filters['student_id'] = $user->id;
-        } elseif ($user->role === 'parent' && $user->parent_of) {
-            // parent_of links a parent user to their child's user ID
-            $filters['student_id'] = $user->parent_of;
+        } elseif ($user->role === 'parent') {
+            // Query parent_student_links to find all children this parent can view
+            $childIds = DB::table('parent_student_links')
+                ->where('parent_id', $user->id)
+                ->pluck('student_id')
+                ->toArray();
+            $filters['student_ids'] = $childIds;
         }
 
         $overview = $this->enrolmentService->getEnrolmentOverview($search, $perPage, $filters);
@@ -280,13 +284,19 @@ class EnrolmentController extends Controller
      */
     public function studentDetail(int $studentId): JsonResponse
     {
-        // Students can only view their own detail; parents can view their child's.
+        // Students can only view their own detail; parents can view their linked children's.
         $user = Auth::user();
         if ($user->role === 'student' && $user->id !== $studentId) {
             return $this->errorResponse('Forbidden', 'FORBIDDEN', 403);
         }
-        if ($user->role === 'parent' && $user->parent_of !== $studentId) {
-            return $this->errorResponse('Forbidden', 'FORBIDDEN', 403);
+        if ($user->role === 'parent') {
+            $isLinked = DB::table('parent_student_links')
+                ->where('parent_id', $user->id)
+                ->where('student_id', $studentId)
+                ->exists();
+            if (!$isLinked) {
+                return $this->errorResponse('Forbidden', 'FORBIDDEN', 403);
+            }
         }
 
         $detail = $this->enrolmentService->getStudentDetail($studentId);

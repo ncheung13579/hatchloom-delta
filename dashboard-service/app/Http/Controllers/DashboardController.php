@@ -31,6 +31,7 @@ namespace App\Http\Controllers;
 use App\Services\DashboardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -69,7 +70,7 @@ class DashboardController extends Controller
      */
     public function studentDrillDown(int $studentId): JsonResponse
     {
-        // Students can only view their own drill-down; parents can view their child's.
+        // Students can only view their own drill-down; parents can view their linked children's.
         $user = Auth::user();
         if ($user->role === 'student' && $user->id !== $studentId) {
             return response()->json([
@@ -78,12 +79,18 @@ class DashboardController extends Controller
                 'code' => 'FORBIDDEN',
             ], 403);
         }
-        if ($user->role === 'parent' && $user->parent_of !== $studentId) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Forbidden',
-                'code' => 'FORBIDDEN',
-            ], 403);
+        if ($user->role === 'parent') {
+            $isLinked = DB::table('parent_student_links')
+                ->where('parent_id', $user->id)
+                ->where('student_id', $studentId)
+                ->exists();
+            if (!$isLinked) {
+                return response()->json([
+                    'error' => true,
+                    'message' => 'Forbidden',
+                    'code' => 'FORBIDDEN',
+                ], 403);
+            }
         }
 
         $result = $this->dashboardService->getStudentDrillDown($studentId);

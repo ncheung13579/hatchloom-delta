@@ -42,7 +42,7 @@ class User extends Authenticatable
      * The 'role' field is one of: school_admin, school_teacher, student.
      * The 'school_id' field links this user to their school (tenant boundary).
      */
-    protected $fillable = ['name', 'email', 'password', 'role', 'school_id', 'grade', 'parent_of'];
+    protected $fillable = ['name', 'email', 'password', 'role', 'school_id', 'grade'];
 
     /**
      * Hide password from JSON serialization so it never leaks in API responses.

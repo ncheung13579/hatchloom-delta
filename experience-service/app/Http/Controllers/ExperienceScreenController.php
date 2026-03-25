@@ -38,6 +38,7 @@ use App\Services\ExperienceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ExperienceScreenController extends Controller
@@ -129,13 +130,19 @@ class ExperienceScreenController extends Controller
      */
     public function studentDetail(Request $request, int $id, int $studentId): JsonResponse
     {
-        // Students can only view their own detail; parents can view their child's.
+        // Students can only view their own detail; parents can view their linked children's.
         $user = Auth::user();
         if ($user->role === 'student' && $user->id !== $studentId) {
             return response()->json(['error' => true, 'message' => 'Forbidden', 'code' => 'FORBIDDEN'], 403);
         }
-        if ($user->role === 'parent' && $user->parent_of !== $studentId) {
-            return response()->json(['error' => true, 'message' => 'Forbidden', 'code' => 'FORBIDDEN'], 403);
+        if ($user->role === 'parent') {
+            $isLinked = DB::table('parent_student_links')
+                ->where('parent_id', $user->id)
+                ->where('student_id', $studentId)
+                ->exists();
+            if (!$isLinked) {
+                return response()->json(['error' => true, 'message' => 'Forbidden', 'code' => 'FORBIDDEN'], 403);
+            }
         }
 
         $experience = $this->experienceService->getExperience($id);

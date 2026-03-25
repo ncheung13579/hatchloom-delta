@@ -128,6 +128,12 @@ class EnrolmentService
             $query->where('id', $filters['student_id']);
         }
 
+        // Filter by student_ids — return only the specified students (used for parent
+        // role scoping where a parent may be linked to multiple children).
+        if (isset($filters['student_ids'])) {
+            $query->whereIn('id', $filters['student_ids']);
+        }
+
         // Grade filtering will be available when the users table includes a grade column.
         // Grade filtering is accepted but not yet applied (awaiting users table migration).
 

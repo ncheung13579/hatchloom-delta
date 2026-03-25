@@ -51,7 +51,7 @@ class User extends Authenticatable
      * Includes 'grade' which is seeded for students but not yet used in filtering
      * (grade-based filtering for the enrolment overview is planned).
      */
-    protected $fillable = ['name', 'email', 'password', 'role', 'school_id', 'grade', 'parent_of'];
+    protected $fillable = ['name', 'email', 'password', 'role', 'school_id', 'grade'];
 
     /**
      * Attributes hidden from JSON serialization.

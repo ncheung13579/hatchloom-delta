@@ -46,7 +46,7 @@ class User extends Authenticatable
      *   - role: One of 'school_admin', 'school_teacher', 'student'
      *   - school_id: FK to the schools table — determines tenant isolation
      */
-    protected $fillable = ['name', 'email', 'password', 'role', 'school_id', 'grade', 'parent_of'];
+    protected $fillable = ['name', 'email', 'password', 'role', 'school_id', 'grade'];
 
     /** Fields excluded from JSON serialization to prevent accidental password exposure. */
     protected $hidden = ['password'];

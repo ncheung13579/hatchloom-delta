@@ -1,5 +1,17 @@
 <?php
 
+/**
+ * Replace the parent_of FK column with a parent_student_links join table.
+ *
+ * The canonical Hatchloom data model (Karl's Role B workpack) defines parent-child
+ * relationships as many-to-many via a `parent_student_links` table:
+ *   - One parent can have multiple children (students)
+ *   - One student can have multiple parents/guardians
+ *
+ * The previous implementation used a single `parent_of` FK on the users table,
+ * which only supported one-to-one relationships.
+ */
+
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
@@ -10,17 +22,17 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (!Schema::hasColumn('users', 'parent_of')) {
-            Schema::table('users', function (Blueprint $table) {
-                $table->unsignedBigInteger('parent_of')->nullable()->after('school_id');
-            });
-        }
+        Schema::create('parent_student_links', function (Blueprint $table) {
+            $table->unsignedBigInteger('parent_id');
+            $table->unsignedBigInteger('student_id');
+            $table->primary(['parent_id', 'student_id']);
+            $table->foreign('parent_id')->references('id')->on('users')->onDelete('cascade');
+            $table->foreign('student_id')->references('id')->on('users')->onDelete('cascade');
+        });
     }
 
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('parent_of');
-        });
+        Schema::dropIfExists('parent_student_links');
     }
 };

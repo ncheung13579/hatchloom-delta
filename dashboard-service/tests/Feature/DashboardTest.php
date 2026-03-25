@@ -845,7 +845,6 @@ class DashboardTest extends TestCase
     private function createParentUser(): void
     {
         // Parent user with ID 14 → matches TOKEN_MAP 'test-parent-token'
-        // parent_of points to the student (ID 4)
         \Illuminate\Support\Facades\DB::table('users')->insert([
             'id' => 14,
             'name' => 'Parent of Student 1',
@@ -853,15 +852,19 @@ class DashboardTest extends TestCase
             'password' => bcrypt('password'),
             'role' => 'parent',
             'school_id' => $this->school->id,
-            'parent_of' => $this->student->id,
             'created_at' => now(),
             'updated_at' => now(),
+        ]);
+
+        // Link parent to their child via parent_student_links (many-to-many)
+        \Illuminate\Support\Facades\DB::table('parent_student_links')->insert([
+            ['parent_id' => 14, 'student_id' => $this->student->id],
         ]);
     }
 
     /**
      * Parent can view their own child's drill-down data.
-     * The controller checks $user->parent_of === $studentId.
+     * The controller checks parent_student_links for the parent-child relationship.
      */
     public function test_parent_can_view_own_childs_drill_down(): void
     {
@@ -892,7 +895,7 @@ class DashboardTest extends TestCase
 
     /**
      * Parent cannot view a student who is not their child.
-     * The controller returns 403 when parent_of does not match the requested studentId.
+     * The controller returns 403 when parent_student_links has no matching row.
      */
     public function test_parent_cannot_view_other_students_drill_down(): void
     {

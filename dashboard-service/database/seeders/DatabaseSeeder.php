@@ -69,7 +69,7 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
-        // Parent user — linked to Student 1 (user_id 4) for Team Romeo's parent dashboard
+        // Parent user — linked to students via parent_student_links (many-to-many)
         DB::table('users')->insertOrIgnore([
             'id' => 14,
             'name' => 'Parent of Student 1',
@@ -77,9 +77,14 @@ class DatabaseSeeder extends Seeder
             'password' => Hash::make('password'),
             'role' => 'parent',
             'school_id' => 1,
-            'parent_of' => 4,
             'created_at' => now(),
             'updated_at' => now(),
+        ]);
+
+        // Parent-student links (canonical many-to-many per Karl's Role B workpack)
+        DB::table('parent_student_links')->insertOrIgnore([
+            ['parent_id' => 14, 'student_id' => 4],  // Parent 1 -> Student 1
+            ['parent_id' => 14, 'student_id' => 5],  // Parent 1 -> Student 2
         ]);
 
         // Platform-level roles (no school_id — belong to Hatchloom, not a school)
