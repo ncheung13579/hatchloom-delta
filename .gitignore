@@ -30,7 +30,7 @@ Thumbs.db
 
 # Frontend scaffolding (not used — API-only services)
 **/vite.config.js
-**/package.json
+*-service/package.json
 **/resources/css/
 **/resources/js/
 **/resources/views/welcome.blade.php

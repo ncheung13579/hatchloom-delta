@@ -16,6 +16,7 @@
  *     GET  /api/school/experiences/{id}/students/{sid} — student detail (Screen 302)
  *     GET  /api/school/experiences/{id}/contents        — course blocks (Screen 302)
  *     GET  /api/school/experiences/{id}/statistics      — stats panel (Screen 302)
+ *     GET  /api/school/courses                          — course catalogue (for experience creation)
  *
  * Middleware stack:
  *   - Health check endpoint: NO middleware (must be accessible for Docker health probes)
@@ -35,6 +36,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\CourseController;
 use App\Http\Controllers\ExperienceController;
 use App\Http\Controllers\ExperienceScreenController;
 use Illuminate\Support\Facades\DB;
@@ -95,9 +97,10 @@ Route::prefix('school')->group(function () {
         Route::get('experiences/{id}', [ExperienceController::class, 'show'])->where('id', '[0-9]+');
     });
 
-    // Admin/teacher-only read endpoints — school-wide statistics and CSV exports.
+    // Admin/teacher-only read endpoints — school-wide statistics, CSV exports, and course catalogue.
     // Students must not access school-wide aggregation or bulk data downloads.
     Route::middleware('mock.auth')->group(function () {
+        Route::get('courses', [CourseController::class, 'index']);
         Route::get('experiences/{id}/students/export', [ExperienceScreenController::class, 'exportStudents'])->where('id', '[0-9]+');
         Route::get('experiences/{id}/statistics', [ExperienceScreenController::class, 'statistics'])->where('id', '[0-9]+');
     });

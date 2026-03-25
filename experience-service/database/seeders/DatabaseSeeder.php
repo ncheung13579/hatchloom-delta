@@ -126,6 +126,16 @@ class DatabaseSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+            [
+                'id' => 3,
+                'school_id' => 1,
+                'name' => 'Creative Problem Solving',
+                'description' => 'Design thinking and collaborative problem-solving workshops',
+                'status' => 'draft',
+                'created_by' => 3,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
         ]);
 
         // Business Foundations has courses 1, 2, 3
@@ -139,6 +149,12 @@ class DatabaseSeeder extends Seeder
         DB::table('experience_courses')->insertOrIgnore([
             ['id' => 4, 'experience_id' => 2, 'course_id' => 4, 'sequence' => 1],
             ['id' => 5, 'experience_id' => 2, 'course_id' => 5, 'sequence' => 2],
+        ]);
+
+        // Creative Problem Solving has courses 2, 5
+        DB::table('experience_courses')->insertOrIgnore([
+            ['id' => 6, 'experience_id' => 3, 'course_id' => 2, 'sequence' => 1],
+            ['id' => 7, 'experience_id' => 3, 'course_id' => 5, 'sequence' => 2],
         ]);
 
         // Reset PostgreSQL sequences so the next INSERT uses the correct ID.

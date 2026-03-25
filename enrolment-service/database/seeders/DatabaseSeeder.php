@@ -126,6 +126,16 @@ class DatabaseSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+            [
+                'id' => 3,
+                'school_id' => 1,
+                'name' => 'Creative Problem Solving',
+                'description' => 'Design thinking and collaborative problem-solving workshops',
+                'status' => 'draft',
+                'created_by' => 3,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
         ]);
 
         // Seed cohorts
@@ -169,6 +179,19 @@ class DatabaseSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+            [
+                'id' => 4,
+                'experience_id' => 1,
+                'school_id' => 1,
+                'name' => 'Cohort D',
+                'status' => 'completed',
+                'teacher_id' => 3,
+                'capacity' => 20,
+                'start_date' => '2025-09-01',
+                'end_date' => '2025-12-15',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
         ]);
 
         // Enrol students 1-6 (user_ids 4-9) in Cohort A
@@ -190,6 +213,25 @@ class DatabaseSeeder extends Seeder
                 'enrolled_at' => now(),
             ]);
         }
+        // Cross-cohort: Student 3 (user_id 6) also in Cohort C — demonstrates
+        // students appearing in multiple cohorts across different experiences
+        DB::table('cohort_enrolments')->insertOrIgnore([
+            'cohort_id' => 3,
+            'student_id' => 6,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        // Cohort D (completed) — students 1-4 (user_ids 4-7) completed this cohort
+        for ($i = 1; $i <= 4; $i++) {
+            DB::table('cohort_enrolments')->insertOrIgnore([
+                'cohort_id' => 4,
+                'student_id' => $i + 3,
+                'status' => 'enrolled',
+                'enrolled_at' => now()->subMonths(4),
+            ]);
+        }
+
         // Students 9-10 (user_ids 12-13) are not assigned
 
         // Reset PostgreSQL sequences so the next INSERT uses the correct ID.
