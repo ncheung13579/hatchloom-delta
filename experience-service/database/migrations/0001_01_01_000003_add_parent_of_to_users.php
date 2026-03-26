@@ -26,8 +26,8 @@ return new class extends Migration
             $table->unsignedBigInteger('parent_id');
             $table->unsignedBigInteger('student_id');
             $table->primary(['parent_id', 'student_id']);
-            $table->foreign('parent_id')->references('id')->on('users')->onDelete('cascade');
-            $table->foreign('student_id')->references('id')->on('users')->onDelete('cascade');
+            $table->index('parent_id');
+            $table->index('student_id');
         });
     }
 
