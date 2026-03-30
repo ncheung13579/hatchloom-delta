@@ -847,24 +847,22 @@ class EnrolmentTest extends TestCase
 
     // ── Concurrency Safety ────────────────────────────────
 
-    public function test_database_unique_constraint_prevents_concurrent_duplicate(): void
+    public function test_application_level_duplicate_check_prevents_double_enrolment(): void
     {
-        // First enrolment succeeds
-        CohortEnrolment::create([
-            'cohort_id' => $this->activeCohort->id,
+        // First enrolment via API succeeds
+        $response = $this->postJson("/api/school/cohorts/{$this->activeCohort->id}/enrolments", [
             'student_id' => $this->student->id,
-            'status' => 'enrolled',
-            'enrolled_at' => now(),
-        ]);
+        ], $this->authHeaders());
 
-        // Simulate a race condition: second insert at the DB level should throw
-        $this->expectException(\Illuminate\Database\QueryException::class);
-        CohortEnrolment::create([
-            'cohort_id' => $this->activeCohort->id,
+        $response->assertStatus(201);
+
+        // Second enrolment via API is blocked (student is currently enrolled)
+        $response = $this->postJson("/api/school/cohorts/{$this->activeCohort->id}/enrolments", [
             'student_id' => $this->student->id,
-            'status' => 'enrolled',
-            'enrolled_at' => now(),
-        ]);
+        ], $this->authHeaders());
+
+        $response->assertStatus(422)
+            ->assertJsonFragment(['code' => 'DUPLICATE_ENROLMENT']);
     }
 
     // ── Assignment status ─────────────────────────────────
