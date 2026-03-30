@@ -536,22 +536,22 @@ class CohortTest extends TestCase
             ->assertJson(['error' => true, 'code' => 'INVALID_STATE_TRANSITION']);
     }
 
-    // ── School Admin permission restriction ────────────────────
+    // ── School Admin permission ─────────────────────────────────
 
-    public function test_school_admin_cannot_create_cohort(): void
+    public function test_school_admin_can_create_cohort(): void
     {
         $response = $this->postJson('/api/school/cohorts', [
             'experience_id' => $this->experience->id,
-            'name' => 'Admin Attempt',
+            'name' => 'Admin Cohort',
             'start_date' => '2026-04-01',
             'end_date' => '2026-08-01',
         ], $this->authHeaders());
 
-        $response->assertStatus(403)
-            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+        $response->assertStatus(201)
+            ->assertJsonFragment(['name' => 'Admin Cohort', 'status' => 'not_started']);
     }
 
-    public function test_school_admin_cannot_update_cohort(): void
+    public function test_school_admin_can_update_cohort(): void
     {
         $cohort = Cohort::create([
             'experience_id' => $this->experience->id,
@@ -563,14 +563,14 @@ class CohortTest extends TestCase
         ]);
 
         $response = $this->putJson("/api/school/cohorts/{$cohort->id}", [
-            'name' => 'Admin Rename Attempt',
+            'name' => 'Admin Renamed',
         ], $this->authHeaders());
 
-        $response->assertStatus(403)
-            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+        $response->assertStatus(200)
+            ->assertJsonFragment(['name' => 'Admin Renamed']);
     }
 
-    public function test_school_admin_cannot_activate_cohort(): void
+    public function test_school_admin_can_activate_cohort(): void
     {
         $cohort = Cohort::create([
             'experience_id' => $this->experience->id,
@@ -583,11 +583,11 @@ class CohortTest extends TestCase
 
         $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/activate", [], $this->authHeaders());
 
-        $response->assertStatus(403)
-            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+        $response->assertStatus(200)
+            ->assertJsonFragment(['status' => 'active']);
     }
 
-    public function test_school_admin_cannot_complete_cohort(): void
+    public function test_school_admin_can_complete_cohort(): void
     {
         $cohort = Cohort::create([
             'experience_id' => $this->experience->id,
@@ -600,8 +600,8 @@ class CohortTest extends TestCase
 
         $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/complete", [], $this->authHeaders());
 
-        $response->assertStatus(403)
-            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+        $response->assertStatus(200)
+            ->assertJsonFragment(['status' => 'completed']);
     }
 
     // ── Capacity default ─────────────────────────────────────

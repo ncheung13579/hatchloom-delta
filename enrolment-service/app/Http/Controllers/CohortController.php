@@ -99,12 +99,11 @@ class CohortController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        // Per Roles PDF: only School Teachers manage cohorts.
-        // School Admins can only add/remove students from cohorts.
-        if (Auth::user()->role !== 'school_teacher') {
+        $role = Auth::user()->role;
+        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
             return response()->json([
                 'error' => true,
-                'message' => 'Only school teachers can create cohorts',
+                'message' => 'Only school teachers and admins can create cohorts',
                 'code' => 'FORBIDDEN',
             ], 403);
         }
@@ -161,10 +160,11 @@ class CohortController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        if (Auth::user()->role !== 'school_teacher') {
+        $role = Auth::user()->role;
+        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
             return response()->json([
                 'error' => true,
-                'message' => 'Only school teachers can update cohorts',
+                'message' => 'Only school teachers and admins can update cohorts',
                 'code' => 'FORBIDDEN',
             ], 403);
         }
@@ -208,10 +208,11 @@ class CohortController extends Controller
      */
     public function activate(int $id): JsonResponse
     {
-        if (Auth::user()->role !== 'school_teacher') {
+        $role = Auth::user()->role;
+        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
             return response()->json([
                 'error' => true,
-                'message' => 'Only school teachers can activate cohorts',
+                'message' => 'Only school teachers and admins can activate cohorts',
                 'code' => 'FORBIDDEN',
             ], 403);
         }
@@ -246,10 +247,11 @@ class CohortController extends Controller
      */
     public function complete(int $id): JsonResponse
     {
-        if (Auth::user()->role !== 'school_teacher') {
+        $role = Auth::user()->role;
+        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
             return response()->json([
                 'error' => true,
-                'message' => 'Only school teachers can complete cohorts',
+                'message' => 'Only school teachers and admins can complete cohorts',
                 'code' => 'FORBIDDEN',
             ], 403);
         }
