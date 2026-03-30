@@ -416,10 +416,10 @@ class EnrolmentTest extends TestCase
     }
 
     /**
-     * Verify that re-enrolling a removed student is blocked.
-     * The duplicate check includes removed enrolments.
+     * Verify that re-enrolling a removed student succeeds.
+     * A new enrolment record is created while the removed one is preserved for audit.
      */
-    public function test_cannot_reenrol_after_removal(): void
+    public function test_can_reenrol_after_removal(): void
     {
         // Create a removed enrolment
         CohortEnrolment::create([
@@ -430,13 +430,15 @@ class EnrolmentTest extends TestCase
             'removed_at' => now(),
         ]);
 
-        // Try to re-enrol the same student
+        // Re-enrol the same student
         $response = $this->postJson("/api/school/cohorts/{$this->activeCohort->id}/enrolments", [
             'student_id' => $this->student->id,
         ], $this->authHeaders());
 
-        $response->assertStatus(422)
-            ->assertJsonFragment(['code' => 'DUPLICATE_ENROLMENT']);
+        $response->assertStatus(201);
+
+        // Verify both records exist (removed + new enrolled) for audit trail
+        $this->assertDatabaseCount('cohort_enrolments', 2);
     }
 
     /**
