@@ -139,12 +139,11 @@ class ExperienceController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        // Per Roles PDF: only School Teachers build experiences.
-        // School Admins can only manage enrolments (add/remove students from cohorts).
-        if (Auth::user()->role !== 'school_teacher') {
+        $role = Auth::user()->role;
+        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
             return response()->json([
                 'error' => true,
-                'message' => 'Only school teachers can create experiences',
+                'message' => 'Only school teachers and admins can create experiences',
                 'code' => 'FORBIDDEN',
             ], 403);
         }
@@ -333,10 +332,11 @@ class ExperienceController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        if (Auth::user()->role !== 'school_teacher') {
+        $role = Auth::user()->role;
+        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
             return response()->json([
                 'error' => true,
-                'message' => 'Only school teachers can delete experiences',
+                'message' => 'Only school teachers and admins can delete experiences',
                 'code' => 'FORBIDDEN',
             ], 403);
         }
