@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('status', 20)->default('enrolled');
             $table->timestamp('enrolled_at')->useCurrent();
             $table->timestamp('removed_at')->nullable();
-            $table->unique(['cohort_id', 'student_id']);
+            $table->index(['cohort_id', 'student_id']);
         });
     }
 

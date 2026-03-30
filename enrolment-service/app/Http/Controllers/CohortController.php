@@ -113,7 +113,7 @@ class CohortController extends Controller
             'name' => ['required', 'string', 'max:255', 'regex:/\S/'],
             'start_date' => 'required|date|after_or_equal:today',
             'end_date' => 'required|date|after:start_date',
-            'capacity' => 'nullable|integer|min:1',
+            'capacity' => 'nullable|integer|min:1|max:10000',
             'teacher_id' => 'nullable|integer|exists:users,id',
         ]);
 
@@ -179,7 +179,7 @@ class CohortController extends Controller
             'name' => ['sometimes', 'string', 'max:255', 'regex:/\S/'],
             'start_date' => 'sometimes|date',
             'end_date' => 'sometimes|date|after:start_date',
-            'capacity' => 'sometimes|integer|min:1',
+            'capacity' => 'sometimes|integer|min:1|max:10000',
             'teacher_id' => 'sometimes|integer|exists:users,id',
         ]);
 
