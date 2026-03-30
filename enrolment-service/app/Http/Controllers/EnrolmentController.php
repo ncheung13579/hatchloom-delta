@@ -196,11 +196,10 @@ class EnrolmentController extends Controller
             return $this->errorResponse('Cohort is at full capacity', 'VALIDATION_ERROR', 422);
         }
 
-        // Check for ANY existing enrolment record, including removed ones.
-        // Re-enrolment after removal is intentionally blocked to preserve the
-        // audit trail -- a removed record should remain as a historical fact.
+        // Check for an active enrolment — removed students can be re-enrolled.
         $existing = CohortEnrolment::where('cohort_id', $cohort->id)
             ->where('student_id', $studentId)
+            ->where('status', 'enrolled')
             ->first();
 
         if ($existing) {
