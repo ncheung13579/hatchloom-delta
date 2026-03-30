@@ -275,10 +275,11 @@ class ExperienceController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        if (Auth::user()->role !== 'school_teacher') {
+        $role = Auth::user()->role;
+        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
             return response()->json([
                 'error' => true,
-                'message' => 'Only school teachers can update experiences',
+                'message' => 'Only school teachers and admins can update experiences',
                 'code' => 'FORBIDDEN',
             ], 403);
         }

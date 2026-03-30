@@ -320,19 +320,19 @@ class ExperienceTest extends TestCase
             ]);
     }
 
-    public function test_school_admin_cannot_create_experience(): void
+    public function test_school_admin_can_create_experience(): void
     {
         $response = $this->postJson('/api/school/experiences', [
-            'name' => 'Admin Attempt',
-            'description' => 'Should be blocked',
+            'name' => 'Admin Created',
+            'description' => 'Admin should be allowed',
             'course_ids' => [1],
         ], $this->authHeaders());
 
-        $response->assertStatus(403)
-            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+        $response->assertStatus(201)
+            ->assertJsonFragment(['name' => 'Admin Created']);
     }
 
-    public function test_school_admin_cannot_update_experience(): void
+    public function test_school_admin_can_update_experience(): void
     {
         $experience = Experience::create([
             'school_id' => $this->school->id,
@@ -343,14 +343,14 @@ class ExperienceTest extends TestCase
         ]);
 
         $response = $this->putJson("/api/school/experiences/{$experience->id}", [
-            'name' => 'Admin Update Attempt',
+            'name' => 'Admin Updated',
         ], $this->authHeaders());
 
-        $response->assertStatus(403)
-            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+        $response->assertStatus(200)
+            ->assertJsonFragment(['name' => 'Admin Updated']);
     }
 
-    public function test_school_admin_cannot_delete_experience(): void
+    public function test_school_admin_can_delete_experience(): void
     {
         $experience = Experience::create([
             'school_id' => $this->school->id,
@@ -362,8 +362,8 @@ class ExperienceTest extends TestCase
 
         $response = $this->deleteJson("/api/school/experiences/{$experience->id}", [], $this->authHeaders());
 
-        $response->assertStatus(403)
-            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+        $response->assertStatus(200)
+            ->assertJsonFragment(['message' => 'Experience archived']);
     }
 
     public function test_can_search_students_in_experience(): void
