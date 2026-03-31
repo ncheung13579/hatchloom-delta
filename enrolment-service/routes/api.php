@@ -14,7 +14,7 @@ declare(strict_types=1);
  *   /school/enrolments/health          (public — no auth)
  *     GET: Health check endpoint for Docker/load balancer probes
  *
- *   /school/cohorts                    (auth required — mock.auth middleware)
+ *   /school/cohorts                    (auth required — auth.role middleware)
  *     GET:    List cohorts (CohortController@index)
  *     POST:   Create cohort (CohortController@store)
  *
@@ -48,8 +48,9 @@ declare(strict_types=1);
  *     GET:    CSV download of all enrolments (EnrolmentController@export)
  *
  * MIDDLEWARE:
- *  - 'mock.auth': MockAuthMiddleware — validates bearer token, sets Auth::user(),
- *    and checks role. Applied to all routes except the health check.
+ *  - 'auth.role': Authentication + role enforcement middleware. The backing
+ *    implementation (MockAuthMiddleware or HttpAuthMiddleware) is selected by
+ *    AUTH_MODE in bootstrap/app.php. Applied to all routes except the health check.
  *  - AuditLogMiddleware is registered globally (not per-route) and logs all
  *    mutating requests (POST, PUT, PATCH, DELETE).
  *
@@ -94,7 +95,7 @@ Route::prefix('school')->group(function () {
     // Read-only endpoints — accessible by admins, teachers, students, and parents.
     // Students see only their own data (auto-filtered by EnrolmentService).
     // Parents see only their linked child's data.
-    Route::middleware('mock.auth:student,parent')->group(function () {
+    Route::middleware('auth.role:student,parent')->group(function () {
         Route::get('cohorts', [CohortController::class, 'index']);
         Route::get('cohorts/{id}', [CohortController::class, 'show'])->where('id', '[0-9]+');
 
@@ -103,13 +104,13 @@ Route::prefix('school')->group(function () {
     });
 
     // Admin/teacher-only read endpoints — school-wide data and exports.
-    Route::middleware('mock.auth')->group(function () {
+    Route::middleware('auth.role')->group(function () {
         Route::get('enrolments/statistics', [EnrolmentController::class, 'statistics']);
         Route::get('enrolments/export', [EnrolmentController::class, 'export']);
     });
 
     // Write endpoints — admin and teacher only (no student access).
-    Route::middleware('mock.auth')->group(function () {
+    Route::middleware('auth.role')->group(function () {
         Route::post('cohorts', [CohortController::class, 'store']);
         Route::put('cohorts/{id}', [CohortController::class, 'update'])->where('id', '[0-9]+');
 

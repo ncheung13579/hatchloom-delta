@@ -5,7 +5,7 @@
  *
  * Request lifecycle position:
  *   This middleware runs BEFORE the request reaches any controller. It is
- *   registered as 'mock.auth' in the kernel and applied to all dashboard
+ *   registered as 'auth.role' in the kernel and applied to all dashboard
  *   endpoints except the health check (see routes/api.php).
  *
  * What it does:
@@ -27,7 +27,7 @@
  *   codebase uses Auth::user() and request()->bearerToken() generically, so
  *   no other code needs to change.
  *
- * @see routes/api.php  Where this middleware is applied via 'mock.auth'
+ * @see routes/api.php  Where this middleware is applied via 'auth.role'
  */
 
 declare(strict_types=1);
@@ -66,7 +66,7 @@ class MockAuthMiddleware
      *
      * Accepts optional extra roles as middleware parameters. By default only
      * school_admin and school_teacher are allowed. Routes can opt in to
-     * additional roles, e.g.: middleware('mock.auth:student') to also
+     * additional roles, e.g.: middleware('auth.role:student') to also
      * allow the student role on read-only endpoints.
      */
     public function handle(Request $request, Closure $next, string ...$extraRoles): Response

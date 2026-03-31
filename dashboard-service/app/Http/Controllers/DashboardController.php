@@ -16,7 +16,7 @@
  *   (port 8002) and Enrolment Service (port 8003) to assemble the response.
  *
  * Authentication:
- *   Every endpoint in this controller sits behind the 'mock.auth' middleware
+ *   Every endpoint in this controller sits behind the 'auth.role' middleware
  *   (see routes/api.php), which requires a valid bearer token and restricts
  *   access to school_admin and school_teacher roles.
  *

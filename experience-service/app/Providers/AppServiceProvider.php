@@ -3,29 +3,27 @@
 /**
  * AppServiceProvider — Dependency injection bindings for the Experience Service.
  *
- * Architecture role:
- *   This is where Laravel's service container is configured. The service container is
- *   Laravel's implementation of Inversion of Control (IoC): instead of classes creating
- *   their own dependencies, the container injects them. This provider tells the container
- *   WHICH concrete class to inject when a controller or service asks for an interface.
+ * This is where the Strategy pattern is wired. The service container is Laravel's
+ * implementation of Inversion of Control (IoC): instead of classes creating their
+ * own dependencies, the container injects them. This provider tells the container
+ * WHICH concrete class to inject when a controller or service asks for an interface.
  *
- * Strategy pattern wiring:
- *   The most important binding here is CourseDataProviderInterface -> MockCourseDataProvider.
- *   This single line controls which course data source the entire application uses.
+ * AUTH_MODE toggle (Strategy pattern):
+ *   The AUTH_MODE environment variable controls which CourseDataProvider
+ *   implementation is injected throughout the application:
+ *
+ *   CourseDataProviderInterface:
+ *     'http' (default) -> HttpCourseDataProvider  (calls Team Papa's Course Service)
+ *     'mock'           -> MockCourseDataProvider  (returns 5 hardcoded courses)
  *
  *   When a controller or service has a constructor parameter typed as
- *   CourseDataProviderInterface, Laravel sees this binding and automatically creates
- *   a MockCourseDataProvider instance to inject. This happens transparently — the
- *   consuming class never knows (or cares) which concrete implementation it received.
+ *   CourseDataProviderInterface, Laravel sees this binding and automatically
+ *   injects the correct implementation. The consuming class never knows (or
+ *   cares) which concrete implementation it received.
  *
- * How to swap to real course data:
- *   When Team Papa's Course Service is ready, create a new class (e.g., HttpCourseDataProvider)
- *   that implements CourseDataProviderInterface and makes real HTTP calls. Then change ONE line:
- *     $this->app->bind(CourseDataProviderInterface::class, HttpCourseDataProvider::class);
- *   All controllers and services will automatically receive the new implementation.
- *
- * @see \App\Contracts\CourseDataProviderInterface  The interface being bound
- * @see \App\Services\MockCourseDataProvider        The current mock implementation
+ * @see \App\Contracts\CourseDataProviderInterface  The Strategy pattern interface
+ * @see \App\Services\MockCourseDataProvider        Mock implementation (dev/testing)
+ * @see \App\Services\HttpCourseDataProvider        HTTP implementation (production)
  */
 
 declare(strict_types=1);

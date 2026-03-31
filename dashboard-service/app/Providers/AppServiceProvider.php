@@ -3,27 +3,30 @@
 /**
  * AppServiceProvider — Dependency injection bindings for the Dashboard Service.
  *
- * This is the central configuration point for the Dashboard Service's dependency
- * injection (DI) container. It wires together the Strategy pattern interfaces
- * with their concrete implementations and registers factory singletons.
+ * This is where the Strategy pattern is wired. Each external data dependency is
+ * defined as an interface, and this provider tells Laravel's container which
+ * concrete class to inject. Controllers and services never know which
+ * implementation they receive — they depend on the interface only.
  *
- * Why this file matters:
- *   When transitioning from mock data to real integrations, this is the ONLY
- *   file that needs to change to swap implementations. All service and controller
- *   code depends on interfaces, not concrete classes, so swapping a mock for a
- *   real implementation is a one-line change here.
+ * AUTH_MODE toggle (Strategy pattern):
+ *   The AUTH_MODE environment variable controls whether providers call real
+ *   external APIs or return hardcoded mock data. This toggle applies to:
  *
- * Current bindings (mock data):
- *   CredentialDataProviderInterface  -> MockCredentialDataProvider
- *   StudentProgressProviderInterface -> MockStudentProgressProvider
- *   LaunchPadDataProviderInterface   -> MockLaunchPadDataProvider
- *   DashboardWidgetFactory           -> singleton (stateless, reusable)
+ *   StudentProgressProviderInterface:
+ *     'http' -> HttpStudentProgressProvider  (calls Team Papa's Course Service)
+ *     'mock' -> MockStudentProgressProvider  (returns sample metrics)
  *
- * Future bindings (real integrations):
- *   CredentialDataProviderInterface  -> CredentialDataProvider (queries Karl's tables)
- *   StudentProgressProviderInterface -> StudentProgressProvider (queries Course Service + activity logs)
- *   LaunchPadDataProviderInterface   -> HttpLaunchPadDataProvider (calls Quebec's LaunchPad API)
- *   DashboardWidgetFactory           -> singleton (no change needed)
+ *   LaunchPadDataProviderInterface:
+ *     'http' -> HttpLaunchPadDataProvider    (calls Team Quebec's User Service)
+ *     'mock' -> MockLaunchPadDataProvider    (returns sample venture data)
+ *
+ * Not yet toggled (pending external team):
+ *   CredentialDataProviderInterface -> MockCredentialDataProvider (always mock)
+ *     Karl's credential engine is not yet available. When it is, add an
+ *     HttpCredentialDataProvider and wire it with the same AUTH_MODE toggle.
+ *
+ * Other bindings:
+ *   DashboardWidgetFactory -> singleton (Factory pattern, stateless)
  *
  * @see \App\Contracts\CredentialDataProviderInterface   Strategy interface for credentials
  * @see \App\Contracts\StudentProgressProviderInterface  Strategy interface for progress metrics

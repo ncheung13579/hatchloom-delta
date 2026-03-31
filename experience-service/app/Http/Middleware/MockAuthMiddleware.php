@@ -5,7 +5,7 @@
  *
  * Architecture role:
  *   This middleware sits at the front of the request lifecycle for all protected
- *   routes (registered as 'mock.auth' in the route middleware stack). It runs
+ *   routes (registered as 'auth.role' in the route middleware stack). It runs
  *   BEFORE the request reaches any controller, and its job is to:
  *     1. Extract the Bearer token from the Authorization header
  *     2. Map it to a seeded User record via a hardcoded lookup table
@@ -61,19 +61,11 @@ class MockAuthMiddleware
     ];
 
     /**
-     * Authenticate the request using the Bearer token, then authorize the user's role.
-     *
-     * Three possible outcomes:
-     *   - 401 Unauthenticated: missing/invalid token, or user record not found in DB
-     *   - 403 Forbidden: valid user but wrong role (e.g., a student token somehow)
-     *   - Pass through: user is authenticated and authorized, request continues to controller
-     */
-    /**
      * Authenticate the request and enforce role-based access control.
      *
      * Accepts optional extra roles as middleware parameters. By default only
      * school_admin and school_teacher are allowed. Routes can opt in to
-     * additional roles, e.g.: middleware('mock.auth:student') to also
+     * additional roles, e.g.: middleware('auth.role:student') to also
      * allow the student role on read-only endpoints.
      */
     public function handle(Request $request, Closure $next, string ...$extraRoles): Response

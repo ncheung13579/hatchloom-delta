@@ -18,9 +18,11 @@ declare(strict_types=1);
  *  5. Check the user's role is allowed (school_admin or school_teacher)
  *  6. Pass the request to the next middleware / controller
  *
- * This middleware is registered as 'mock.auth' in the kernel and applied to
- * all protected routes in routes/api.php. It will be replaced by Team Quebec's
- * real auth integration in a later deliverable.
+ * This middleware is registered under the 'auth.role' alias in bootstrap/app.php
+ * and applied to all protected routes in routes/api.php. The AUTH_MODE env
+ * variable controls whether 'auth.role' points to this mock implementation or
+ * to HttpAuthMiddleware. It will be replaced by Team Quebec's real auth
+ * integration in a later deliverable.
  *
  * @see routes/api.php  Where this middleware is applied to route groups
  */
@@ -68,7 +70,7 @@ class MockAuthMiddleware
      *
      * Accepts optional extra roles as middleware parameters. By default only
      * school_admin and school_teacher are allowed. Routes can opt in to
-     * additional roles, e.g.: middleware('mock.auth:student') to also
+     * additional roles, e.g.: middleware('auth.role:student') to also
      * allow the student role on read-only endpoints.
      */
     public function handle(Request $request, Closure $next, string ...$extraRoles): Response

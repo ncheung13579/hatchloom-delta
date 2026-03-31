@@ -20,7 +20,7 @@
  *
  * Middleware stack:
  *   - Health check endpoint: NO middleware (must be accessible for Docker health probes)
- *   - All other endpoints: 'mock.auth' middleware (MockAuthMiddleware) which:
+ *   - All other endpoints: 'auth.role' middleware (authentication + role enforcement) which:
  *       1. Authenticates via bearer token -> user lookup
  *       2. Authorizes the user's role (school_admin or school_teacher only)
  *       3. Sets Auth::user() so SchoolScope can enforce tenant isolation
@@ -80,14 +80,15 @@ Route::prefix('school')->group(function () {
         ], $httpStatus);
     });
 
-    // All routes inside this group require a valid bearer token (mock auth for development).
-    // The middleware alias 'mock.auth' is registered in the application's kernel/bootstrap.
+    // All routes inside this group require a valid bearer token and an authorized role.
+    // The middleware alias 'auth.role' is registered in bootstrap/app.php (backed by
+    // MockAuthMiddleware or HttpAuthMiddleware depending on the AUTH_MODE env var).
 
     // Read-only endpoints — accessible by admins, teachers, students, and parents.
     // Students see experience list, detail, contents, and their own student detail.
     // These MUST be registered before the write endpoints to prevent the {id} wildcard
     // from swallowing path segments like "students" or "contents" as an experience ID.
-    Route::middleware('mock.auth:student,parent')->group(function () {
+    Route::middleware('auth.role:student,parent')->group(function () {
         Route::get('experiences/{id}/students/{studentId}', [ExperienceScreenController::class, 'studentDetail'])->where(['id' => '[0-9]+', 'studentId' => '[0-9]+']);
         Route::get('experiences/{id}/students', [ExperienceScreenController::class, 'students'])->where('id', '[0-9]+');
         Route::get('experiences/{id}/contents', [ExperienceScreenController::class, 'contents'])->where('id', '[0-9]+');
@@ -99,14 +100,14 @@ Route::prefix('school')->group(function () {
 
     // Admin/teacher-only read endpoints — school-wide statistics, CSV exports, and course catalogue.
     // Students must not access school-wide aggregation or bulk data downloads.
-    Route::middleware('mock.auth')->group(function () {
+    Route::middleware('auth.role')->group(function () {
         Route::get('courses', [CourseController::class, 'index']);
         Route::get('experiences/{id}/students/export', [ExperienceScreenController::class, 'exportStudents'])->where('id', '[0-9]+');
         Route::get('experiences/{id}/statistics', [ExperienceScreenController::class, 'statistics'])->where('id', '[0-9]+');
     });
 
     // Write endpoints — admin and teacher only (no student access).
-    Route::middleware('mock.auth')->group(function () {
+    Route::middleware('auth.role')->group(function () {
         Route::post('experiences', [ExperienceController::class, 'store']);
         Route::put('experiences/{id}', [ExperienceController::class, 'update'])->where('id', '[0-9]+');
         Route::delete('experiences/{id}', [ExperienceController::class, 'destroy'])->where('id', '[0-9]+');

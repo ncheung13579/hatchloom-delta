@@ -10,18 +10,18 @@
  *   PUBLIC (no auth):
  *     GET /api/school/dashboard/health — Health check for Docker/load balancer
  *
- *   AUTHENTICATED — admin/teacher only (mock.auth):
+ *   AUTHENTICATED — admin/teacher only (auth.role):
  *     GET /api/school/dashboard                          — Full dashboard overview
  *     GET /api/school/dashboard/reporting/pos-coverage    — R3: PoS curriculum coverage
  *     GET /api/school/dashboard/reporting/engagement      — R3: Engagement rates
  *     GET /api/school/dashboard/widgets                   — All widgets (Factory Method)
  *     GET /api/school/dashboard/widgets/{type}            — Single widget by type
  *
- *   AUTHENTICATED — all roles (mock.auth:student,parent):
+ *   AUTHENTICATED — all roles (auth.role:student,parent):
  *     GET /api/school/dashboard/students/{studentId}     — Student drill-down (scoped by controller)
  *
  * Middleware stack for authenticated routes:
- *   1. 'mock.auth' (MockAuthMiddleware) — Validates bearer token, resolves user,
+ *   1. 'auth.role' (MockAuthMiddleware) — Validates bearer token, resolves user,
  *      checks role (school_admin or school_teacher). Registered in bootstrap/app.php.
  *   2. AuditLogMiddleware may also be in the global middleware stack for mutation logging.
  *
@@ -87,7 +87,7 @@ Route::prefix('school')->group(function () {
     // School-wide dashboard endpoints — admin and teacher only.
     // These return aggregated data across all students/cohorts in the school,
     // so students and parents must NOT have access.
-    Route::middleware('mock.auth')->group(function () {
+    Route::middleware('auth.role')->group(function () {
         // Main dashboard overview — aggregates Experience + Enrolment service data
         Route::get('dashboard', [DashboardController::class, 'index']);
 
@@ -104,7 +104,7 @@ Route::prefix('school')->group(function () {
     // Student drill-down — accessible by admins, teachers, students, and parents.
     // Controller enforces that students can only view their own data and parents
     // can only view their child's data (see DashboardController::studentDrillDown).
-    Route::middleware('mock.auth:student,parent')->group(function () {
+    Route::middleware('auth.role:student,parent')->group(function () {
         Route::get('dashboard/students/{studentId}', [DashboardController::class, 'studentDrillDown']);
     });
 });
