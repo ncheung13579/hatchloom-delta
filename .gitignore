@@ -58,3 +58,7 @@ debug_403.php
 
 # Internal changelog (not for external distribution)
 CHANGELOG.md
+
+# Demo preparation documents (content folded into README.md)
+DEMO-GUIDE.md
+DEMO-WALKTHROUGH.md
