@@ -9,17 +9,13 @@ declare(strict_types=1);
  * bindings. It is the key configuration point for the Strategy pattern used in this service.
  *
  * STRATEGY PATTERN BINDING:
- * The current binding is CredentialDataProviderInterface -> MockCredentialDataProvider.
- * This means whenever any class (currently EnrolmentService) asks for
- * CredentialDataProviderInterface via constructor injection, Laravel's container will
- * automatically provide an instance of MockCredentialDataProvider.
+ *   CredentialDataProviderInterface:
+ *     'http' -> HttpCredentialDataProvider  (calls Karl's Credential Engine)
+ *     'mock' -> MockCredentialDataProvider  (returns sample credential data)
  *
- * HOW TO SWAP TO A REAL PROVIDER (when Karl's credential engine is ready):
- *   1. Create a new class (e.g., RealCredentialDataProvider) that implements
- *      CredentialDataProviderInterface with actual database queries or API calls
- *   2. Change the binding below from MockCredentialDataProvider to the new class
- *   3. No other code changes needed — EnrolmentService and EnrolmentController
- *      are unaffected because they depend on the interface, not the concrete class
+ * The AUTH_MODE environment variable controls which implementation is injected.
+ * EnrolmentService and EnrolmentController are unaffected because they depend
+ * on the interface, not the concrete class.
  *
  * WHY bind() AND NOT singleton():
  * bind() creates a new instance each time the interface is resolved. Since
@@ -35,6 +31,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Contracts\CredentialDataProviderInterface;
+use App\Services\HttpCredentialDataProvider;
 use App\Services\MockCredentialDataProvider;
 use Illuminate\Support\ServiceProvider;
 
@@ -43,17 +40,18 @@ class AppServiceProvider extends ServiceProvider
     /**
      * Register any application services.
      *
-     * Binds the CredentialDataProviderInterface to the mock implementation.
-     * When Karl's credential engine is available, swap
-     * MockCredentialDataProvider for the real implementation here.
-     *
-     * This single line is what makes the Strategy pattern work: it tells
-     * Laravel's container "whenever someone asks for the interface, give
-     * them this concrete class."
+     * Binds the CredentialDataProviderInterface to either the HTTP or mock
+     * implementation based on the AUTH_MODE env var. This is the Strategy
+     * pattern in action: the container decides which concrete class to inject.
      */
     public function register(): void
     {
-        $this->app->bind(CredentialDataProviderInterface::class, MockCredentialDataProvider::class);
+        $this->app->bind(
+            CredentialDataProviderInterface::class,
+            env('AUTH_MODE', 'http') === 'http'
+                ? HttpCredentialDataProvider::class
+                : MockCredentialDataProvider::class
+        );
     }
 
     /**

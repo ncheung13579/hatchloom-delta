@@ -20,10 +20,9 @@
  *     'http' -> HttpLaunchPadDataProvider    (calls Team Quebec's User Service)
  *     'mock' -> MockLaunchPadDataProvider    (returns sample venture data)
  *
- * Not yet toggled (pending external team):
- *   CredentialDataProviderInterface -> MockCredentialDataProvider (always mock)
- *     Karl's credential engine is not yet available. When it is, add an
- *     HttpCredentialDataProvider and wire it with the same AUTH_MODE toggle.
+ *   CredentialDataProviderInterface:
+ *     'http' -> HttpCredentialDataProvider  (calls Karl's Credential Engine)
+ *     'mock' -> MockCredentialDataProvider  (returns sample credential data)
  *
  * Other bindings:
  *   DashboardWidgetFactory -> singleton (Factory pattern, stateless)
@@ -42,6 +41,7 @@ use App\Contracts\CredentialDataProviderInterface;
 use App\Contracts\LaunchPadDataProviderInterface;
 use App\Contracts\StudentProgressProviderInterface;
 use App\Factories\DashboardWidgetFactory;
+use App\Services\HttpCredentialDataProvider;
 use App\Services\HttpLaunchPadDataProvider;
 use App\Services\HttpStudentProgressProvider;
 use App\Services\MockCredentialDataProvider;
@@ -66,9 +66,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Strategy binding: credential data (mock — swap to real in AppServiceProvider)
-        // Replace with real implementation when Karl's credential engine is ready
-        $this->app->bind(CredentialDataProviderInterface::class, MockCredentialDataProvider::class);
+        // Strategy binding: credential data
+        // Toggle via AUTH_MODE env var: 'http' uses Karl's real API, 'mock' uses sample data
+        $this->app->bind(
+            CredentialDataProviderInterface::class,
+            env('AUTH_MODE', 'http') === 'http'
+                ? HttpCredentialDataProvider::class
+                : MockCredentialDataProvider::class
+        );
 
         // Strategy binding: student progress metrics
         // Toggle via AUTH_MODE env var: 'http' uses Papa's real API, 'mock' uses sample data

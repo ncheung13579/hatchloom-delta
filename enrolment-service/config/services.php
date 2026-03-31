@@ -39,4 +39,8 @@ return [
         'url' => env('USER_SERVICE_URL', 'http://localhost:8080'),
     ],
 
+    'credential' => [
+        'url' => env('CREDENTIAL_SERVICE_URL', 'http://localhost:8005'),
+    ],
+
 ];
