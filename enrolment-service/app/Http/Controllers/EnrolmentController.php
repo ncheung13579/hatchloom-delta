@@ -28,6 +28,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Traits\SanitizesCsvOutput;
 use App\Models\Cohort;
 use App\Models\CohortEnrolment;
 use App\Models\User;
@@ -47,6 +48,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class EnrolmentController extends Controller
 {
+    use SanitizesCsvOutput;
+
     /**
      * Constructor injection of EnrolmentService.
      *
@@ -188,11 +191,11 @@ class EnrolmentController extends Controller
             return $this->errorResponse('Student not found or not in your school', 'VALIDATION_ERROR', 422);
         }
 
-        if ($cohort->status !== 'active') {
+        if ($cohort->status !== \App\Enums\CohortStatus::ACTIVE->value) {
             return $this->errorResponse('Cohort is not active', 'VALIDATION_ERROR', 422);
         }
 
-        if ($cohort->capacity && $cohort->activeEnrolments()->count() >= $cohort->capacity) {
+        if ($cohort->isFull()) {
             return $this->errorResponse('Cohort is at full capacity', 'VALIDATION_ERROR', 422);
         }
 
@@ -207,28 +210,6 @@ class EnrolmentController extends Controller
         }
 
         return null;
-    }
-
-    /**
-     * Build a standardized error response.
-     *
-     * Eliminates duplicated error response construction across controller methods.
-     */
-    private function errorResponse(string $message, string $code, int $status): JsonResponse
-    {
-        return response()->json([
-            'error' => true,
-            'message' => $message,
-            'code' => $code,
-        ], $status);
-    }
-
-    private static function sanitizeCsvValue(?string $value): string
-    {
-        if ($value === null) {
-            return '';
-        }
-        return $value;
     }
 
     /**
@@ -288,14 +269,8 @@ class EnrolmentController extends Controller
         if ($user->role === 'student' && $user->id !== $studentId) {
             return $this->errorResponse('Forbidden', 'FORBIDDEN', 403);
         }
-        if ($user->role === 'parent') {
-            $isLinked = DB::table('parent_student_links')
-                ->where('parent_id', $user->id)
-                ->where('student_id', $studentId)
-                ->exists();
-            if (!$isLinked) {
-                return $this->errorResponse('Forbidden', 'FORBIDDEN', 403);
-            }
+        if ($user->role === 'parent' && !$this->parentCanAccessStudent($user->id, $studentId)) {
+            return $this->errorResponse('Forbidden', 'FORBIDDEN', 403);
         }
 
         $detail = $this->enrolmentService->getStudentDetail($studentId);
@@ -333,5 +308,16 @@ class EnrolmentController extends Controller
         }, 'enrolments.csv', [
             'Content-Type' => 'text/csv',
         ]);
+    }
+
+    /**
+     * Check whether a parent has a link to the given student.
+     */
+    private function parentCanAccessStudent(int $parentId, int $studentId): bool
+    {
+        return DB::table('parent_student_links')
+            ->where('parent_id', $parentId)
+            ->where('student_id', $studentId)
+            ->exists();
     }
 }

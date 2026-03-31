@@ -33,6 +33,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Traits\SanitizesCsvOutput;
 use App\Services\ExperienceScreenService;
 use App\Services\ExperienceService;
 use Illuminate\Http\JsonResponse;
@@ -43,13 +44,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ExperienceScreenController extends Controller
 {
-    private static function sanitizeCsvValue(?string $value): string
-    {
-        if ($value === null) {
-            return '';
-        }
-        return $value;
-    }
+    use SanitizesCsvOutput;
 
     /**
      * @param ExperienceService       $experienceService  Used solely to look up and validate the parent Experience.
@@ -135,14 +130,8 @@ class ExperienceScreenController extends Controller
         if ($user->role === 'student' && $user->id !== $studentId) {
             return response()->json(['error' => true, 'message' => 'Forbidden', 'code' => 'FORBIDDEN'], 403);
         }
-        if ($user->role === 'parent') {
-            $isLinked = DB::table('parent_student_links')
-                ->where('parent_id', $user->id)
-                ->where('student_id', $studentId)
-                ->exists();
-            if (!$isLinked) {
-                return response()->json(['error' => true, 'message' => 'Forbidden', 'code' => 'FORBIDDEN'], 403);
-            }
+        if ($user->role === 'parent' && !$this->parentCanAccessStudent($user->id, $studentId)) {
+            return response()->json(['error' => true, 'message' => 'Forbidden', 'code' => 'FORBIDDEN'], 403);
         }
 
         $experience = $this->experienceService->getExperience($id);
@@ -212,5 +201,16 @@ class ExperienceScreenController extends Controller
         }
 
         return response()->json($this->screenService->getExperienceStatistics($experience));
+    }
+
+    /**
+     * Check whether a parent has a link to the given student.
+     */
+    private function parentCanAccessStudent(int $parentId, int $studentId): bool
+    {
+        return DB::table('parent_student_links')
+            ->where('parent_id', $parentId)
+            ->where('student_id', $studentId)
+            ->exists();
     }
 }

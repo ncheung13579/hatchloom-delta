@@ -33,6 +33,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Contracts\CredentialDataProviderInterface;
+use App\Enums\CohortStatus;
 use App\Events\StudentEnrolled;
 use App\Events\StudentRemoved;
 use App\Models\Cohort;
@@ -190,7 +191,7 @@ class EnrolmentService
     private function determineAssignmentStatus(\Illuminate\Support\Collection $enrolments): string
     {
         $hasActiveEnrolment = $enrolments->contains(function (CohortEnrolment $e) {
-            return $e->status === 'enrolled' && $e->cohort && $e->cohort->status === 'active';
+            return $e->status === 'enrolled' && $e->cohort && $e->cohort->status === CohortStatus::ACTIVE->value;
         });
 
         if ($hasActiveEnrolment) {
@@ -316,7 +317,7 @@ class EnrolmentService
 
         // Students with at least one enrolled status in an ACTIVE cohort specifically
         $activeStudentIds = CohortEnrolment::whereHas('cohort', function ($q) use ($schoolId) {
-            $q->where('school_id', $schoolId)->where('status', 'active');
+            $q->where('school_id', $schoolId)->where('status', CohortStatus::ACTIVE->value);
         })->where('status', 'enrolled')
             ->pluck('student_id')
             ->unique();
@@ -359,7 +360,7 @@ class EnrolmentService
         }
 
         $cohorts = Cohort::where('school_id', $schoolId)
-            ->where('status', 'active')
+            ->where('status', CohortStatus::ACTIVE->value)
             ->withCount(['activeEnrolments'])
             ->get();
 

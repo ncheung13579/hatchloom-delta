@@ -39,6 +39,8 @@ use App\Contracts\CredentialDataProviderInterface;
 use App\Contracts\LaunchPadDataProviderInterface;
 use App\Contracts\StudentProgressProviderInterface;
 use App\Factories\DashboardWidgetFactory;
+use App\Services\HttpLaunchPadDataProvider;
+use App\Services\HttpStudentProgressProvider;
 use App\Services\MockCredentialDataProvider;
 use App\Services\MockLaunchPadDataProvider;
 use App\Services\MockStudentProgressProvider;
@@ -65,13 +67,23 @@ class AppServiceProvider extends ServiceProvider
         // Replace with real implementation when Karl's credential engine is ready
         $this->app->bind(CredentialDataProviderInterface::class, MockCredentialDataProvider::class);
 
-        // Strategy binding: student progress metrics (mock — swap to real in AppServiceProvider)
-        // Replace with real implementation when Team Papa's Course Service is integrated
-        $this->app->bind(StudentProgressProviderInterface::class, MockStudentProgressProvider::class);
+        // Strategy binding: student progress metrics
+        // Toggle via AUTH_MODE env var: 'http' uses Papa's real API, 'mock' uses sample data
+        $this->app->bind(
+            StudentProgressProviderInterface::class,
+            env('AUTH_MODE', 'http') === 'http'
+                ? HttpStudentProgressProvider::class
+                : MockStudentProgressProvider::class
+        );
 
-        // Strategy binding: LaunchPad venture data (mock — swap to real in AppServiceProvider)
-        // Replace with real implementation when Team Quebec's LaunchPad Service is integrated
-        $this->app->bind(LaunchPadDataProviderInterface::class, MockLaunchPadDataProvider::class);
+        // Strategy binding: LaunchPad venture data
+        // Toggle via AUTH_MODE env var: 'http' uses Quebec's real API, 'mock' uses sample data
+        $this->app->bind(
+            LaunchPadDataProviderInterface::class,
+            env('AUTH_MODE', 'http') === 'http'
+                ? HttpLaunchPadDataProvider::class
+                : MockLaunchPadDataProvider::class
+        );
 
         // Widget factory: singleton because it's stateless — the WIDGET_MAP constant
         // never changes, so there's no reason to create multiple instances

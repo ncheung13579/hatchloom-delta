@@ -33,6 +33,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Contracts\CourseDataProviderInterface;
+use App\Http\Controllers\Traits\RequiresTeacherAdmin;
 use App\Services\ExperienceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,6 +43,8 @@ use Illuminate\Support\Facades\Log;
 
 class ExperienceController extends Controller
 {
+    use RequiresTeacherAdmin;
+
     /**
      * Dependencies are injected by Laravel's service container.
      *
@@ -139,13 +142,8 @@ class ExperienceController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        $role = Auth::user()->role;
-        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Only school teachers and admins can create experiences',
-                'code' => 'FORBIDDEN',
-            ], 403);
+        if ($denied = $this->authorizeTeacherAdmin('create experiences')) {
+            return $denied;
         }
 
         // Step 1: Structural validation — Laravel handles type/format checks.
@@ -169,14 +167,7 @@ class ExperienceController extends Controller
 
         $experience = $this->experienceService->createExperience($validated);
 
-        // Batch-resolve course names from the provider in a single call.
-        $courseIds = $experience->courses->pluck('course_id')->all();
-        $courseMap = collect($this->courseDataProvider->getCoursesByIds($courseIds))->keyBy('id');
-        $courses = $experience->courses->map(fn($c) => [
-            'id' => $c->course_id,
-            'name' => $courseMap->get($c->course_id)['name'] ?? 'Unknown',
-            'sequence' => $c->sequence,
-        ]);
+        $courses = $this->resolveCourseNames($experience);
 
         return response()->json([
             'id' => $experience->id,
@@ -219,14 +210,7 @@ class ExperienceController extends Controller
             ], 404);
         }
 
-        // Batch-resolve course names from the provider in a single call.
-        $courseIds = $experience->courses->pluck('course_id')->all();
-        $courseMap = collect($this->courseDataProvider->getCoursesByIds($courseIds))->keyBy('id');
-        $courses = $experience->courses->map(fn($c) => [
-            'id' => $c->course_id,
-            'name' => $courseMap->get($c->course_id)['name'] ?? 'Unknown',
-            'sequence' => $c->sequence,
-        ]);
+        $courses = $this->resolveCourseNames($experience);
 
         // --- Cross-service HTTP call to the Enrolment Service (port 8003) ---
         // Endpoint: GET /api/school/cohorts?experience_id={id}
@@ -275,13 +259,8 @@ class ExperienceController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $role = Auth::user()->role;
-        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Only school teachers and admins can update experiences',
-                'code' => 'FORBIDDEN',
-            ], 403);
+        if ($denied = $this->authorizeTeacherAdmin('update experiences')) {
+            return $denied;
         }
 
         $experience = $this->experienceService->getExperience($id);
@@ -333,13 +312,8 @@ class ExperienceController extends Controller
      */
     public function destroy(int $id): JsonResponse
     {
-        $role = Auth::user()->role;
-        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Only school teachers and admins can delete experiences',
-                'code' => 'FORBIDDEN',
-            ], 403);
+        if ($denied = $this->authorizeTeacherAdmin('delete experiences')) {
+            return $denied;
         }
 
         $experience = $this->experienceService->getExperience($id);
@@ -355,5 +329,24 @@ class ExperienceController extends Controller
         $this->experienceService->deleteExperience($experience);
 
         return response()->json(['message' => 'Experience archived']);
+    }
+
+    /**
+     * Batch-resolve course names from the strategy-pattern provider.
+     *
+     * Extracted from store() and show() to eliminate duplicated course ID
+     * resolution logic. Makes a single batch call to the provider rather
+     * than N individual lookups.
+     */
+    private function resolveCourseNames($experience): \Illuminate\Support\Collection
+    {
+        $courseIds = $experience->courses->pluck('course_id')->all();
+        $courseMap = collect($this->courseDataProvider->getCoursesByIds($courseIds))->keyBy('id');
+
+        return $experience->courses->map(fn($c) => [
+            'id' => $c->course_id,
+            'name' => $courseMap->get($c->course_id)['name'] ?? 'Unknown',
+            'sequence' => $c->sequence,
+        ]);
     }
 }

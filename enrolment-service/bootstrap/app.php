@@ -16,8 +16,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $authMiddleware = env('AUTH_MODE', 'http') === 'http'
+            ? \App\Http\Middleware\HttpAuthMiddleware::class
+            : \App\Http\Middleware\MockAuthMiddleware::class;
+
         $middleware->alias([
-            'mock.auth' => \App\Http\Middleware\MockAuthMiddleware::class,
+            'mock.auth' => $authMiddleware,
         ]);
         $middleware->appendToGroup('api', [
             \App\Http\Middleware\SecurityHeadersMiddleware::class,

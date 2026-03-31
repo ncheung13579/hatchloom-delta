@@ -7,4 +7,10 @@ return [
     'enrolment' => [
         'url' => env('ENROLMENT_SERVICE_URL', 'http://localhost:8003'),
     ],
+    'user' => [
+        'url' => env('USER_SERVICE_URL', 'http://localhost:8080'),
+    ],
+    'course' => [
+        'url' => env('COURSE_SERVICE_URL', 'http://localhost:8004'),
+    ],
 ];

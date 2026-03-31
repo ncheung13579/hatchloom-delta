@@ -165,7 +165,14 @@ Tests are also run automatically via GitHub Actions on push to `main` and on pul
 
 **Integrating with Delta?** See [`API-CONTRACT.docx`](API-CONTRACT.docx) for full endpoint documentation, request/response shapes, authentication tokens, data ownership, and integration contracts for each team.
 
-### Quick Reference (Mock Auth Tokens)
+### Authentication
+
+The system supports two authentication modes, toggled by the `AUTH_MODE` environment variable:
+
+- **`AUTH_MODE=http`** (default): Real authentication via Team Quebec's User Service. JWT bearer tokens are validated against Quebec's `/auth/validate` endpoint, and user profiles are fetched by email to match local users. This is the production mode.
+- **`AUTH_MODE=mock`**: Static token-to-user mapping for development and testing. No external service required.
+
+When running with `AUTH_MODE=mock`, the following tokens are available:
 
 | Token | User | Role |
 |-------|------|------|
@@ -191,6 +198,9 @@ Tests are also run automatically via GitHub Actions on push to `main` and on pul
 | `DB_DATABASE` | hatchloom | All | Database name |
 | `DB_USERNAME` | hatchloom | All | Database user |
 | `DB_PASSWORD` | secret | All | Database password |
+| `AUTH_MODE` | http | All | Auth mode: `http` (real JWT via Quebec) or `mock` (static tokens) |
+| `USER_SERVICE_URL` | http://localhost:8080 | All | URL for Team Quebec's User Service (JWT auth) |
+| `COURSE_SERVICE_URL` | http://localhost:8004 | Dashboard, Experience | URL for Team Papa's Course Service |
 | `EXPERIENCE_SERVICE_URL` | http://experience-service:8002 | Dashboard | URL for Experience Service |
 | `ENROLMENT_SERVICE_URL` | http://enrolment-service:8003 | Dashboard, Experience | URL for Enrolment Service |
 | `CACHE_STORE` | array | All | Cache driver |
@@ -216,15 +226,26 @@ See `.github/workflows/ci.yml` for details.
 | Code changes not reflected | Source is baked into images at build time | Run `docker compose build` then `docker compose up -d` |
 | Port conflict on 8001/8002/8003 | Another process using the port | Stop the conflicting process or edit port mappings in `docker-compose.yml` |
 
+## External Integrations (Strategy Pattern)
+
+All external data dependencies use a Strategy pattern with both mock and real HTTP implementations, toggled by `AUTH_MODE`:
+
+| Interface | Mock Provider | HTTP Provider | External Service |
+|-----------|--------------|---------------|------------------|
+| Auth middleware | `MockAuthMiddleware` | `HttpAuthMiddleware` | Quebec User Service (JWT) |
+| `LaunchPadDataProviderInterface` | `MockLaunchPadDataProvider` | `HttpLaunchPadDataProvider` | Quebec User Service (venture counts) |
+| `CourseDataProviderInterface` | `MockCourseDataProvider` | `HttpCourseDataProvider` | Papa Course Service (catalogue) |
+| `StudentProgressProviderInterface` | `MockStudentProgressProvider` | `HttpStudentProgressProvider` | Papa Course Service (progress metrics) |
+| `CredentialDataProviderInterface` | `MockCredentialDataProvider` | *(not yet implemented)* | Karl's credential engine |
+
+When `AUTH_MODE=http` (default), the HTTP providers are active. When `AUTH_MODE=mock` (used in tests), mock providers return static sample data. The toggle is configured in each service's `AppServiceProvider` and `bootstrap/app.php`.
+
 ## Known Limitations
 
-- **Authentication is mocked** -- hardcoded bearer token-to-user mapping via `MockAuthMiddleware`. Production auth will use session tokens validated by the API Gateway (see API contract for details).
-- **Course data is mocked** -- the course catalogue from Team Papa is provided by a `MockCourseDataProvider` class rather than real HTTP calls. Only course IDs 1-5 exist.
-- **Credential data is mocked** -- `MockCredentialDataProvider` returns sample data for all students. Real credential data will come from Karl's credential engine.
-- **Progress data is mocked** -- `MockStudentProgressProvider` returns placeholder values. Real progress data will come from Team Papa's Course Service.
-- **No real inter-team integration** -- all cross-team data (courses, credentials, progress) is provided by mock providers implementing strategy-pattern interfaces. See the API contract "Data Ownership" section for swap instructions.
+- **Credential data is mocked** -- `MockCredentialDataProvider` returns sample data for all students. Real credential data will come from Karl's credential engine when available.
 - **School scoping uses mock data** -- only one school (Ridgewood Academy) is seeded. Multi-tenant isolation is implemented but not tested across multiple schools.
 - **No API gateway** -- services call each other directly over the Docker network.
+- **Papa and Quebec services must be running** -- when `AUTH_MODE=http`, the Quebec User Service and Papa Course Service must be reachable at the configured URLs. Set `AUTH_MODE=mock` for standalone development.
 
 ## Team Members
 

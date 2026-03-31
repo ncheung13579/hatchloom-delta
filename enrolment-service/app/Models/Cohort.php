@@ -44,6 +44,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Contracts\CohortState;
+use App\Enums\CohortStatus;
 use App\Models\Scopes\SchoolScope;
 use App\States\ActiveState;
 use App\States\CompletedState;
@@ -109,22 +110,21 @@ class Cohort extends Model
      *
      * @var array<string, class-string<CohortState>>
      */
-    private static array $stateMap = [
-        'not_started' => NotStartedState::class,
-        'active' => ActiveState::class,
-        'completed' => CompletedState::class,
-    ];
-
     /**
      * Resolve the current CohortState object from the status column.
      *
-     * Looks up the status string in $stateMap and instantiates the
-     * corresponding state class. Falls back to NotStartedState if the
-     * status is somehow unrecognized (defensive programming).
+     * Maps the CohortStatus enum values to their corresponding State
+     * pattern classes. Falls back to NotStartedState if the status is
+     * somehow unrecognized (defensive programming).
      */
     public function state(): CohortState
     {
-        $stateClass = self::$stateMap[$this->status] ?? NotStartedState::class;
+        $stateClass = match ($this->status) {
+            CohortStatus::NOT_STARTED->value => NotStartedState::class,
+            CohortStatus::ACTIVE->value => ActiveState::class,
+            CohortStatus::COMPLETED->value => CompletedState::class,
+            default => NotStartedState::class,
+        };
         return new $stateClass();
     }
 
@@ -163,6 +163,21 @@ class Cohort extends Model
         }
         $this->status = (new CompletedState())->status();
         return $this->save();
+    }
+
+    /**
+     * Check whether the cohort has reached its capacity limit.
+     *
+     * Returns false if capacity is null (unlimited). Extracted from
+     * EnrolmentController to keep capacity logic on the model that
+     * owns the data.
+     */
+    public function isFull(): bool
+    {
+        if (!$this->capacity) {
+            return false;
+        }
+        return $this->activeEnrolments()->count() >= $this->capacity;
     }
 
     // ── Relationships ──────────────────────────────────────────

@@ -22,6 +22,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('parent_student_links')) {
+            return;
+        }
+
         Schema::create('parent_student_links', function (Blueprint $table) {
             $table->unsignedBigInteger('parent_id');
             $table->unsignedBigInteger('student_id');

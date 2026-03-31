@@ -285,7 +285,7 @@ NEW_EXP_ID=$(json_val "id")
 echo "  (created experience ID: $NEW_EXP_ID)"
 
 # Update the experience
-do_request PATCH "$EXPERIENCE/api/school/experiences/${NEW_EXP_ID}" \
+do_request PUT "$EXPERIENCE/api/school/experiences/${NEW_EXP_ID}" \
     '{"name":"Updated Integration Experience"}'
 assert_status 200 "Update experience returns 200"
 assert_contains '"Updated Integration Experience"' "Updated experience has new name"

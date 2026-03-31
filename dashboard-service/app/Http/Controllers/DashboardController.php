@@ -79,18 +79,12 @@ class DashboardController extends Controller
                 'code' => 'FORBIDDEN',
             ], 403);
         }
-        if ($user->role === 'parent') {
-            $isLinked = DB::table('parent_student_links')
-                ->where('parent_id', $user->id)
-                ->where('student_id', $studentId)
-                ->exists();
-            if (!$isLinked) {
-                return response()->json([
-                    'error' => true,
-                    'message' => 'Forbidden',
-                    'code' => 'FORBIDDEN',
-                ], 403);
-            }
+        if ($user->role === 'parent' && !$this->parentCanAccessStudent($user->id, $studentId)) {
+            return response()->json([
+                'error' => true,
+                'message' => 'Forbidden',
+                'code' => 'FORBIDDEN',
+            ], 403);
         }
 
         $result = $this->dashboardService->getStudentDrillDown($studentId);
@@ -167,5 +161,19 @@ class DashboardController extends Controller
                 'code' => 'VALIDATION_ERROR',
             ], 422);
         }
+    }
+
+    /**
+     * Check whether a parent has a link to the given student.
+     *
+     * Queries the parent_student_links table, which is the canonical
+     * many-to-many relationship between parents and their children.
+     */
+    private function parentCanAccessStudent(int $parentId, int $studentId): bool
+    {
+        return DB::table('parent_student_links')
+            ->where('parent_id', $parentId)
+            ->where('student_id', $studentId)
+            ->exists();
     }
 }

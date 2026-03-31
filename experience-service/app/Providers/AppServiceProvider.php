@@ -33,6 +33,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Contracts\CourseDataProviderInterface;
+use App\Services\HttpCourseDataProvider;
 use App\Services\MockCourseDataProvider;
 use Illuminate\Support\ServiceProvider;
 
@@ -48,7 +49,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->bind(CourseDataProviderInterface::class, MockCourseDataProvider::class);
+        $this->app->bind(
+            CourseDataProviderInterface::class,
+            env('AUTH_MODE', 'http') === 'http'
+                ? HttpCourseDataProvider::class
+                : MockCourseDataProvider::class
+        );
     }
 
     /**

@@ -27,6 +27,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Traits\RequiresTeacherAdmin;
 use App\Models\Cohort;
 use App\Models\Experience;
 use App\Services\CohortService;
@@ -44,6 +45,8 @@ use Illuminate\Support\Facades\DB;
  */
 class CohortController extends Controller
 {
+    use RequiresTeacherAdmin;
+
     /**
      * Constructor injection of the CohortService.
      *
@@ -99,13 +102,8 @@ class CohortController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        $role = Auth::user()->role;
-        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Only school teachers and admins can create cohorts',
-                'code' => 'FORBIDDEN',
-            ], 403);
+        if ($denied = $this->authorizeTeacherAdmin('create cohorts')) {
+            return $denied;
         }
 
         $validated = $request->validate([
@@ -160,13 +158,8 @@ class CohortController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        $role = Auth::user()->role;
-        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Only school teachers and admins can update cohorts',
-                'code' => 'FORBIDDEN',
-            ], 403);
+        if ($denied = $this->authorizeTeacherAdmin('update cohorts')) {
+            return $denied;
         }
 
         $cohort = $this->cohortService->getCohort($id);
@@ -208,13 +201,8 @@ class CohortController extends Controller
      */
     public function activate(int $id): JsonResponse
     {
-        $role = Auth::user()->role;
-        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Only school teachers and admins can activate cohorts',
-                'code' => 'FORBIDDEN',
-            ], 403);
+        if ($denied = $this->authorizeTeacherAdmin('activate cohorts')) {
+            return $denied;
         }
 
         return DB::transaction(function () use ($id) {
@@ -247,13 +235,8 @@ class CohortController extends Controller
      */
     public function complete(int $id): JsonResponse
     {
-        $role = Auth::user()->role;
-        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
-            return response()->json([
-                'error' => true,
-                'message' => 'Only school teachers and admins can complete cohorts',
-                'code' => 'FORBIDDEN',
-            ], 403);
+        if ($denied = $this->authorizeTeacherAdmin('complete cohorts')) {
+            return $denied;
         }
 
         return DB::transaction(function () use ($id) {
@@ -275,27 +258,4 @@ class CohortController extends Controller
         });
     }
 
-    /**
-     * Build a standardized error response.
-     *
-     * Eliminates 6 duplicated error response blocks across this controller.
-     */
-    private function errorResponse(string $message, string $code, int $status): JsonResponse
-    {
-        return response()->json([
-            'error' => true,
-            'message' => $message,
-            'code' => $code,
-        ], $status);
-    }
-
-    /**
-     * Build a 404 not-found error response.
-     *
-     * Convenience wrapper for the most common error case in this controller.
-     */
-    private function notFoundResponse(string $message): JsonResponse
-    {
-        return $this->errorResponse($message, 'NOT_FOUND', 404);
-    }
 }

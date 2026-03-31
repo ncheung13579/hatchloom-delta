@@ -30,6 +30,7 @@ services:
       DB_DATABASE: hatchloom
       DB_USERNAME: hatchloom
       DB_PASSWORD: secret
+      AUTH_MODE: mock
       CACHE_STORE: array
       SESSION_DRIVER: array
     depends_on:
@@ -57,6 +58,7 @@ services:
       DB_DATABASE: hatchloom
       DB_USERNAME: hatchloom
       DB_PASSWORD: secret
+      AUTH_MODE: mock
       ENROLMENT_SERVICE_URL: http://enrolment-service:8003
       CACHE_STORE: array
       SESSION_DRIVER: array
@@ -85,6 +87,7 @@ services:
       DB_DATABASE: hatchloom
       DB_USERNAME: hatchloom
       DB_PASSWORD: secret
+      AUTH_MODE: mock
       EXPERIENCE_SERVICE_URL: http://experience-service:8002
       ENROLMENT_SERVICE_URL: http://enrolment-service:8003
       CACHE_STORE: array
