@@ -140,13 +140,25 @@ class EnrolmentService
 
         $students = $query->paginate($perPage);
 
-        // Batch-load all enrolments for students on this page in a single query,
+        // Batch-load enrolments for students on this page in a single query,
         // avoiding the N+1 pattern of querying enrolments per student individually.
+        // When filtered by experience_id or cohort_id, scope the enrolments to match
+        // so that the response only includes assignments relevant to the filter context.
         $studentIds = $students->getCollection()->pluck('id');
-        $allEnrolments = CohortEnrolment::whereIn('student_id', $studentIds)
-            ->with(['cohort.experience'])
-            ->get()
-            ->groupBy('student_id');
+        $enrolmentQuery = CohortEnrolment::whereIn('student_id', $studentIds)
+            ->with(['cohort.experience']);
+
+        if (isset($filters['experience_id'])) {
+            $enrolmentQuery->whereHas('cohort', function ($q) use ($filters) {
+                $q->where('experience_id', $filters['experience_id']);
+            });
+        }
+
+        if (isset($filters['cohort_id'])) {
+            $enrolmentQuery->where('cohort_id', $filters['cohort_id']);
+        }
+
+        $allEnrolments = $enrolmentQuery->get()->groupBy('student_id');
 
         $students->getCollection()->transform(function (User $student) use ($allEnrolments) {
             return $this->transformStudentWithAssignments($student, $allEnrolments->get($student->id, collect()));
@@ -391,13 +403,27 @@ class EnrolmentService
      * cohort's school_id, since CohortEnrolment itself does not have a
      * school_id column.
      */
-    public function exportEnrolmentList(): array
+    public function exportEnrolmentList(array $filters = []): array
     {
         $schoolId = Auth::user()->school_id;
 
-        $enrolments = CohortEnrolment::whereHas('cohort', function ($q) use ($schoolId) {
+        $query = CohortEnrolment::whereHas('cohort', function ($q) use ($schoolId) {
             $q->where('school_id', $schoolId);
-        })->with(['student', 'cohort.experience'])->get();
+        })->with(['student', 'cohort.experience']);
+
+        // Filter by specific cohort
+        if (isset($filters['cohort_id'])) {
+            $query->where('cohort_id', $filters['cohort_id']);
+        }
+
+        // Filter by experience (all cohorts belonging to that experience)
+        if (isset($filters['experience_id'])) {
+            $query->whereHas('cohort', function ($q) use ($filters) {
+                $q->where('experience_id', $filters['experience_id']);
+            });
+        }
+
+        $enrolments = $query->get();
 
         $rows = [];
         foreach ($enrolments as $enrolment) {

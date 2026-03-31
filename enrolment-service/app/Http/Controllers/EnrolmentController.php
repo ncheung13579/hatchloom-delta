@@ -283,7 +283,12 @@ class EnrolmentController extends Controller
     }
 
     /**
-     * Export all enrolment records as a downloadable CSV file.
+     * Export enrolment records as a downloadable CSV file.
+     *
+     * Supports optional query filters for confidentiality:
+     *   - ?cohort_id=1      → only enrolments in that cohort
+     *   - ?experience_id=1  → only enrolments in cohorts of that experience
+     *   - (no filter)       → all enrolments for the school
      *
      * Streams the CSV directly to the client using php://output to avoid loading
      * the entire dataset into memory. Includes both active and removed enrolments
@@ -292,9 +297,10 @@ class EnrolmentController extends Controller
      * The CSV columns are: student_name, student_email, cohort_name,
      * experience_name, status, enrolled_at, removed_at.
      */
-    public function export(): StreamedResponse
+    public function export(Request $request): StreamedResponse
     {
-        $rows = $this->enrolmentService->exportEnrolmentList();
+        $filters = $request->only(['cohort_id', 'experience_id']);
+        $rows = $this->enrolmentService->exportEnrolmentList($filters);
 
         // streamDownload() sends HTTP headers (Content-Type, Content-Disposition)
         // and then calls the closure to write CSV rows directly to the output stream.
