@@ -363,7 +363,7 @@ Pre-seeded data for a realistic school scenario. Seeders run automatically durin
 | Users | 16 | 1 admin, 2 teachers, 10 students (grades 8-12), 1 parent, 2 platform staff |
 | Experiences | 3 | Business Foundations (active), Tech Explorers (active), Creative Problem Solving (draft) |
 | Courses | 5 | Mock catalogue: Entrepreneurship, Financial Literacy, Marketing, Digital Skills, Coding |
-| Cohorts | 5 | A (active, 6 students), B (not started, 0), C (active, 3), D (completed, 4), E (not started, 0) |
+| Cohorts | 4 | A (active, 6 students), B (not started, 0), C (active, 3), D (completed, 4) |
 | Enrolments | 13 | Including multi-cohort students, removed students, and 2 unassigned students for warning banners |
 
 Key student IDs for testing:
