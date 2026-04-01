@@ -252,7 +252,7 @@ Since Quebec manages user registration, the integrating team must ensure Delta's
 | `password` | varchar(255) | Yes | Can be a placeholder hash; not used when `AUTH_MODE=http` |
 | `role` | varchar(20) | Yes | `school_admin`, `school_teacher`, `student`, `parent` |
 | `school_id` | bigint (FK) | Nullable | References `schools.id`. Null for platform-level staff. |
-| `grade` | varchar | Nullable | Student grade level (e.g., `"10"`) |
+| `grade` | smallint | Nullable | Student grade level (e.g., `10`) |
 | `created_at` | timestamp | Yes | |
 | `updated_at` | timestamp | Yes | |
 
