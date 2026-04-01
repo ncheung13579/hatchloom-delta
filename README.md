@@ -90,6 +90,90 @@ curl -4 -H "Authorization: Bearer <jwt-token>" http://localhost:8001/api/school/
 
 Teacher-only actions return `403` for all other roles. Missing or invalid tokens return `401`.
 
+Parent-child links use the `parent_student_links` join table. The backend verifies the parent-child relationship before returning any student data.
+
+---
+
+## Cohort Lifecycle
+
+Cohorts follow a one-directional state machine:
+
+```
+not_started  ──PATCH /activate──>  active  ──PATCH /complete──>  completed
+```
+
+- New cohorts start as `not_started`
+- Only `not_started` cohorts can be activated (409 otherwise)
+- Only `active` cohorts can be completed (409 otherwise)
+- Transitions are irreversible — a completed cohort cannot be reactivated
+
+Students can only be enrolled in `active` cohorts. A student can be enrolled in multiple cohorts across different experiences simultaneously.
+
+---
+
+## Error Response Format
+
+All error responses use a consistent envelope:
+
+```json
+{
+  "error": true,
+  "message": "Human-readable description",
+  "code": "MACHINE_READABLE_CODE"
+}
+```
+
+Common error codes:
+
+| HTTP Status | Code | When |
+|-------------|------|------|
+| 401 | `UNAUTHENTICATED` | Missing or invalid bearer token |
+| 403 | `FORBIDDEN` | Valid token, insufficient role |
+| 404 | `NOT_FOUND` | Resource does not exist |
+| 409 | `INVALID_STATE_TRANSITION` | Cohort state transition not allowed |
+| 422 | `VALIDATION_ERROR` | Missing or invalid request fields |
+| 422 | `DUPLICATE_ENROLMENT` | Student already enrolled in cohort |
+
+---
+
+## External Service Dependencies
+
+Delta calls three external services. When `AUTH_MODE=http`, all providers make real HTTP calls. If an external service is unavailable, affected endpoints degrade gracefully (empty arrays or zero values) rather than failing.
+
+| External Service | What Delta Consumes | Environment Variable |
+|-----------------|---------------------|----------------------|
+| **Quebec User Service** | JWT token validation on every request, venture/LaunchPad counts for dashboard | `USER_SERVICE_URL` |
+| **Papa Course Service** | Course catalogue for experience creation, block data for content views, student progress/credit data | `COURSE_SERVICE_URL` |
+| **Karl's Credential Engine** | Badges, certificates, and curriculum (PoS) coverage mapping for student drill-downs | `CREDENTIAL_SERVICE_URL` |
+
+### Cross-Service Communication (Internal)
+
+The Dashboard Service has no database tables of its own. It aggregates data by calling the other two Delta services over HTTP:
+
+- **Dashboard → Experience Service**: experience list, course contents, statistics
+- **Dashboard → Enrolment Service**: cohort list, enrolment statistics, student details
+- **Experience → Enrolment Service**: cohort data for experience detail views
+
+If a downstream service is unreachable, the Dashboard returns a partial response with a `service_degraded` warning flag rather than a 500 error.
+
+---
+
+## Database Tables
+
+All three services share one PostgreSQL database. Tables and ownership:
+
+| Table | Owner | Description |
+|-------|-------|-------------|
+| `schools` | Shared | School records |
+| `users` | Shared | All user accounts (admins, teachers, students, parents, platform staff) |
+| `parent_student_links` | Shared | Many-to-many parent-child relationships |
+| `experiences` | Experience Service | Learning experiences |
+| `experience_courses` | Experience Service | Course assignments within experiences (references Papa course IDs) |
+| `cohorts` | Enrolment Service | Student groups within an experience, with lifecycle state |
+| `cohort_enrolments` | Enrolment Service | Student-to-cohort assignments |
+
+The database starts empty. Data is populated through API calls — users via Quebec's auth service, courses via Papa, and school/experience/cohort data through Delta's own endpoints.
+
 ---
 
 ## API Endpoints
@@ -142,6 +226,56 @@ Teacher-only actions return `403` for all other roles. Missing or invalid tokens
 | GET | `/api/school/enrolments/health` | Public | Health check |
 
 For full request/response shapes, see [`API-CONTRACT.docx`](API-CONTRACT.docx).
+
+---
+
+## Standalone Development (AUTH_MODE=mock)
+
+For development without external services, set `AUTH_MODE=mock` in `docker-compose.yml` for all three services. This switches authentication to static bearer tokens and replaces all external HTTP calls with mock data providers.
+
+Mock tokens when `AUTH_MODE=mock`:
+
+| Token | Role |
+|-------|------|
+| `test-admin-token` | `school_admin` |
+| `test-teacher-token` | `school_teacher` |
+| `test-student-token` | `student` |
+| `test-parent-token` | `parent` |
+
+```bash
+curl -4 -H "Authorization: Bearer test-admin-token" http://localhost:8001/api/school/dashboard
+```
+
+Mock providers return realistic static data demonstrating the correct response structures. Switching back to `AUTH_MODE=http` requires no code changes — only the environment variable.
+
+---
+
+## Local Development (Without Docker)
+
+Each service is an independent Laravel application:
+
+```bash
+cd experience-service
+composer install
+cp .env.example .env
+# Edit .env: set DB_HOST=localhost (default is "postgres", the Docker hostname)
+php artisan key:generate
+php artisan migrate
+php artisan serve --port=8002
+```
+
+Repeat for `enrolment-service` (port 8003) and `dashboard-service` (port 8001).
+
+For cross-service HTTP calls to work locally, set these in each service's `.env`:
+
+```
+# Dashboard Service
+EXPERIENCE_SERVICE_URL=http://localhost:8002
+ENROLMENT_SERVICE_URL=http://localhost:8003
+
+# Experience Service
+ENROLMENT_SERVICE_URL=http://localhost:8003
+```
 
 ---
 
