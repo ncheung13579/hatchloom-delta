@@ -1,5 +1,5 @@
 #!/bin/bash
-# Wait for PostgreSQL to be ready, then run migrations and seed data.
+# Wait for PostgreSQL to be ready, then run migrations.
 # This ensures `docker compose up` is all an integrating team needs to run.
 
 set -e
@@ -20,11 +20,6 @@ for attempt in 1 2 3 4 5; do
     echo "Migration attempt $attempt failed (likely race condition), retrying in 3s..."
     sleep 3
 done
-
-# Seed separately — `migrate --seed` silently skips the seeder when
-# another service already applied all shared migrations ("Nothing to migrate").
-echo "Seeding database..."
-php artisan db:seed --force 2>&1 || true
 
 echo "Caching configuration..."
 php artisan config:cache

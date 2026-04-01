@@ -63,7 +63,9 @@ CHANGELOG.md
 DEMO-GUIDE.md
 DEMO-WALKTHROUGH.md
 
-# Test scripts (internal use only — not for customer distribution)
+# Test scripts and infrastructure (internal use only)
 run-integration-tests.sh
 run-integration-tests-full.sh
 stress_test.sh
+docker-compose.integration.yml
+reset-sequences.php
