@@ -83,8 +83,8 @@ curl -4 -H "Authorization: Bearer <jwt-token>" http://localhost:8001/api/school/
 
 | Role | Permissions |
 |------|-------------|
-| `school_admin` | Unrestricted. Read all screens, create/edit/archive experiences, manage cohorts, enrol/remove students. |
-| `school_teacher` | Same as `school_admin`. Primary focus is building experiences and running cohorts, but has full write access to avoid workflow bottlenecks. |
+| `school_admin` | Unrestricted. Read all screens (dashboard overview, reporting, statistics), create/edit/archive experiences, manage cohorts, enrol/remove students. |
+| `school_teacher` | Create/edit/archive experiences, manage cohorts, enrol/remove students. No access to dashboard overview or reporting screens. |
 | `student` | Read own enrolments, progress, and credentials only. |
 | `parent` | Read linked children's data only. Backend enforces parent-child link verification. |
 
@@ -266,12 +266,12 @@ A `schools` record must exist before creating users that reference it.
 
 | Method | Endpoint | Auth | Purpose |
 |--------|----------|------|---------|
-| GET | `/api/school/dashboard` | Admin/Teacher | Full dashboard overview with KPIs |
+| GET | `/api/school/dashboard` | Admin only | Full dashboard overview with KPIs |
 | GET | `/api/school/dashboard/students/{id}` | All roles (scoped) | Student drill-down with progress, credentials, curriculum mapping |
-| GET | `/api/school/dashboard/widgets` | Admin/Teacher | All dashboard widgets |
-| GET | `/api/school/dashboard/widgets/{type}` | Admin/Teacher | Single widget (`cohort_summary`, `student_table`, `engagement_chart`) |
-| GET | `/api/school/dashboard/reporting/pos-coverage` | Admin/Teacher | Curriculum coverage reporting |
-| GET | `/api/school/dashboard/reporting/engagement` | Admin/Teacher | Engagement rates |
+| GET | `/api/school/dashboard/widgets` | Admin only | All dashboard widgets |
+| GET | `/api/school/dashboard/widgets/{type}` | Admin only | Single widget (`cohort_summary`, `student_table`, `engagement_chart`) |
+| GET | `/api/school/dashboard/reporting/pos-coverage` | Admin only | Curriculum coverage reporting |
+| GET | `/api/school/dashboard/reporting/engagement` | Admin only | Engagement rates |
 | GET | `/api/school/dashboard/health` | Public | Health check |
 
 ### Experience Service (Port 8002)

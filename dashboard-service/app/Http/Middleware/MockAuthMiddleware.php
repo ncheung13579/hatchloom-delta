@@ -12,7 +12,7 @@
  *   1. Extracts the Bearer token from the Authorization header
  *   2. Looks up the token in a hardcoded map to find the corresponding user ID
  *   3. Loads the User model from the database and logs them in via Auth::login()
- *   4. Checks that the user's role is school_admin or school_teacher
+ *   4. Checks that the user's role is school_admin (default) or any extra roles passed to middleware
  *   5. If any step fails, returns a 401 (Unauthenticated) or 403 (Forbidden)
  *
  * Why mock auth?
@@ -98,9 +98,12 @@ class MockAuthMiddleware
         // and $request->user() to access the current user's identity and school_id
         Auth::login($user);
 
-        // Role-based access control: school_admin and school_teacher are always
-        // allowed. Additional roles can be granted per-route via middleware params.
-        $allowedRoles = array_merge(['school_admin', 'school_teacher'], $extraRoles);
+        // Role-based access control: only school_admin is allowed by default.
+        // The dashboard overview and reporting screens are admin-only (per the
+        // Hatchloom reference screens). Additional roles can be granted per-route
+        // via middleware params, e.g. auth.role:school_teacher,student,parent
+        // for the student drill-down endpoint.
+        $allowedRoles = array_merge(['school_admin'], $extraRoles);
         if (!in_array($user->role, $allowedRoles)) {
             return response()->json([
                 'error' => true,

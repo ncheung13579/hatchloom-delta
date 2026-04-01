@@ -127,8 +127,10 @@ class HttpAuthMiddleware
         // Step 4: Log the user in so Auth::user() works throughout the request
         Auth::login($user);
 
-        // Step 5: Role-based access control (same logic as MockAuthMiddleware)
-        $allowedRoles = array_merge(['school_admin', 'school_teacher'], $extraRoles);
+        // Step 5: Role-based access control — admin-only by default.
+        // Dashboard overview and reporting are admin screens. Other roles
+        // (school_teacher, student, parent) are granted per-route via params.
+        $allowedRoles = array_merge(['school_admin'], $extraRoles);
         if (!in_array($user->role, $allowedRoles)) {
             return response()->json([
                 'error' => true,

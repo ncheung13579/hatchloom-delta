@@ -920,7 +920,7 @@ class DashboardTest extends TestCase
 
     /**
      * Parent cannot access the school-wide dashboard overview.
-     * Only school_admin and school_teacher roles are allowed.
+     * Only school_admin is allowed on overview/reporting endpoints.
      */
     public function test_parent_cannot_access_dashboard_overview(): void
     {
@@ -1105,5 +1105,99 @@ class DashboardTest extends TestCase
                 'error' => true,
                 'code' => 'METHOD_NOT_ALLOWED',
             ]);
+    }
+
+    // ── Teacher role restrictions on dashboard screens ────────
+
+    private function teacherHeaders(): array
+    {
+        return ['Authorization' => 'Bearer test-teacher-token'];
+    }
+
+    /**
+     * Teachers cannot access the school-wide dashboard overview.
+     * Per the Hatchloom reference screens, the dashboard overview (Screen 300)
+     * is an admin-only screen. Teachers have their own per-cohort views.
+     */
+    public function test_teacher_cannot_access_dashboard_overview(): void
+    {
+        $response = $this->getJson('/api/school/dashboard', $this->teacherHeaders());
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    /**
+     * Teachers cannot access PoS coverage reporting (admin screen).
+     */
+    public function test_teacher_cannot_access_pos_coverage(): void
+    {
+        $response = $this->getJson('/api/school/dashboard/reporting/pos-coverage', $this->teacherHeaders());
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    /**
+     * Teachers cannot access engagement rates reporting (admin screen).
+     */
+    public function test_teacher_cannot_access_engagement_rates(): void
+    {
+        $response = $this->getJson('/api/school/dashboard/reporting/engagement', $this->teacherHeaders());
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    /**
+     * Teachers cannot access dashboard widgets (admin screen).
+     */
+    public function test_teacher_cannot_access_widgets(): void
+    {
+        $response = $this->getJson('/api/school/dashboard/widgets', $this->teacherHeaders());
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    /**
+     * Teachers cannot access individual dashboard widgets (admin screen).
+     */
+    public function test_teacher_cannot_access_individual_widget(): void
+    {
+        $response = $this->getJson('/api/school/dashboard/widgets/cohort_summary', $this->teacherHeaders());
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    /**
+     * Teachers CAN access the student drill-down endpoint.
+     * Teachers need to view individual student progress within their cohorts.
+     */
+    public function test_teacher_can_access_student_drill_down(): void
+    {
+        Http::fake([
+            '*/api/school/enrolments/students/*' => Http::response([
+                'id' => $this->student->id,
+                'name' => 'Student 1',
+                'email' => 'student1@ridgewood.edu',
+                'role' => 'student',
+                'school_id' => $this->school->id,
+                'enrolments' => [],
+                'credentials' => [],
+            ]),
+            '*/api/school/experiences*' => Http::response([
+                'data' => [],
+                'meta' => ['current_page' => 1, 'last_page' => 1, 'per_page' => 15, 'total' => 0],
+            ]),
+        ]);
+
+        $response = $this->getJson(
+            "/api/school/dashboard/students/{$this->student->id}",
+            $this->teacherHeaders()
+        );
+
+        $response->assertStatus(200);
     }
 }

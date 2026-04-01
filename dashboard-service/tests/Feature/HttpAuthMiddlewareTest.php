@@ -290,7 +290,11 @@ class HttpAuthMiddlewareTest extends TestCase
         $this->assertEquals(200, $response->getStatusCode());
     }
 
-    public function test_teacher_role_allowed_by_default(): void
+    /**
+     * Teachers are NOT allowed by default on dashboard endpoints (admin-only).
+     * They must be explicitly added via middleware params on specific routes.
+     */
+    public function test_teacher_role_blocked_by_default(): void
     {
         $teacher = User::create([
             'name' => 'Teacher',
@@ -305,6 +309,31 @@ class HttpAuthMiddlewareTest extends TestCase
         $response = $this->middleware->handle(
             $this->makeRequest('teacher-token'),
             $this->passthrough()
+        );
+
+        $this->assertEquals(403, $response->getStatusCode());
+    }
+
+    /**
+     * Teachers ARE allowed when explicitly added via middleware params
+     * (e.g., for the student drill-down endpoint).
+     */
+    public function test_teacher_role_allowed_when_explicitly_added(): void
+    {
+        $teacher = User::create([
+            'name' => 'Teacher',
+            'email' => 'teacher@ridgewood.edu',
+            'password' => bcrypt('password'),
+            'role' => 'school_teacher',
+            'school_id' => $this->school->id,
+        ]);
+
+        $this->fakeQuebecSuccess('teacher@ridgewood.edu', 'SCHOOL_TEACHER');
+
+        $response = $this->middleware->handle(
+            $this->makeRequest('teacher-token'),
+            $this->passthrough(),
+            'school_teacher'
         );
 
         $this->assertEquals(200, $response->getStatusCode());
