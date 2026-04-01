@@ -62,3 +62,8 @@ CHANGELOG.md
 # Demo preparation documents (content folded into README.md)
 DEMO-GUIDE.md
 DEMO-WALKTHROUGH.md
+
+# Test scripts (internal use only — not for customer distribution)
+run-integration-tests.sh
+run-integration-tests-full.sh
+stress_test.sh
