@@ -217,42 +217,29 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // Enrol students 1-6 (user_ids 4-9) in Cohort A
-        for ($i = 1; $i <= 6; $i++) {
-            DB::table('cohort_enrolments')->insertOrIgnore([
-                'cohort_id' => 1,
-                'student_id' => $i + 3,
-                'status' => 'enrolled',
-                'enrolled_at' => now(),
-            ]);
-        }
-
-        // Enrol students 7-8 (user_ids 10-11) in Cohort C
-        for ($i = 7; $i <= 8; $i++) {
-            DB::table('cohort_enrolments')->insertOrIgnore([
-                'cohort_id' => 3,
-                'student_id' => $i + 3,
-                'status' => 'enrolled',
-                'enrolled_at' => now(),
-            ]);
-        }
-        // Cross-cohort: Student 3 (user_id 6) also in Cohort C — demonstrates
-        // students appearing in multiple cohorts across different experiences
         DB::table('cohort_enrolments')->insertOrIgnore([
-            'cohort_id' => 3,
-            'student_id' => 6,
-            'status' => 'enrolled',
-            'enrolled_at' => now(),
+            ['id' => 1, 'cohort_id' => 1, 'student_id' => 4, 'status' => 'enrolled', 'enrolled_at' => now()],
+            ['id' => 2, 'cohort_id' => 1, 'student_id' => 5, 'status' => 'enrolled', 'enrolled_at' => now()],
+            ['id' => 3, 'cohort_id' => 1, 'student_id' => 6, 'status' => 'enrolled', 'enrolled_at' => now()],
+            ['id' => 4, 'cohort_id' => 1, 'student_id' => 7, 'status' => 'enrolled', 'enrolled_at' => now()],
+            ['id' => 5, 'cohort_id' => 1, 'student_id' => 8, 'status' => 'enrolled', 'enrolled_at' => now()],
+            ['id' => 6, 'cohort_id' => 1, 'student_id' => 9, 'status' => 'enrolled', 'enrolled_at' => now()],
+        ]);
+
+        // Enrol students 7-8 (user_ids 10-11) + cross-cohort student 3 (user_id 6) in Cohort C
+        DB::table('cohort_enrolments')->insertOrIgnore([
+            ['id' => 7,  'cohort_id' => 3, 'student_id' => 10, 'status' => 'enrolled', 'enrolled_at' => now()],
+            ['id' => 8,  'cohort_id' => 3, 'student_id' => 11, 'status' => 'enrolled', 'enrolled_at' => now()],
+            ['id' => 9,  'cohort_id' => 3, 'student_id' => 6,  'status' => 'enrolled', 'enrolled_at' => now()],
         ]);
 
         // Cohort D (completed) — students 1-4 (user_ids 4-7) completed this cohort
-        for ($i = 1; $i <= 4; $i++) {
-            DB::table('cohort_enrolments')->insertOrIgnore([
-                'cohort_id' => 4,
-                'student_id' => $i + 3,
-                'status' => 'enrolled',
-                'enrolled_at' => now()->subMonths(4),
-            ]);
-        }
+        DB::table('cohort_enrolments')->insertOrIgnore([
+            ['id' => 10, 'cohort_id' => 4, 'student_id' => 4, 'status' => 'enrolled', 'enrolled_at' => now()->subMonths(4)],
+            ['id' => 11, 'cohort_id' => 4, 'student_id' => 5, 'status' => 'enrolled', 'enrolled_at' => now()->subMonths(4)],
+            ['id' => 12, 'cohort_id' => 4, 'student_id' => 6, 'status' => 'enrolled', 'enrolled_at' => now()->subMonths(4)],
+            ['id' => 13, 'cohort_id' => 4, 'student_id' => 7, 'status' => 'enrolled', 'enrolled_at' => now()->subMonths(4)],
+        ]);
 
         // Students 9-10 (user_ids 12-13) are not assigned
 

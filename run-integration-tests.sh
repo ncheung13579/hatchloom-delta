@@ -20,6 +20,23 @@ EXPERIENCE="${EXPERIENCE_URL:-http://localhost:8002}"
 ENROLMENT="${ENROLMENT_URL:-http://localhost:8003}"
 AUTH="Authorization: Bearer test-admin-token"
 
+# ── Cleanup: reseed database after tests to prevent stale data ────
+# Uses TRUNCATE + reseed instead of migrate:fresh because all services
+# share a single PostgreSQL database — migrate:fresh on one service
+# would drop the other services' tables.
+cleanup() {
+    if [ "${SKIP_CLEANUP:-}" = "1" ]; then return; fi
+    echo ""
+    echo "--- Cleanup: Reseeding database to clean state ---"
+    docker compose exec -T postgres psql -U hatchloom -d hatchloom -c \
+        "TRUNCATE TABLE cohort_enrolments, cohorts, experience_courses, experiences, parent_student_links, users, schools RESTART IDENTITY CASCADE;" \
+        2>/dev/null || true
+    docker compose exec -T enrolment-service php artisan db:seed --force 2>/dev/null || true
+    docker compose exec -T experience-service php artisan db:seed --force 2>/dev/null || true
+    echo "  Database reseeded."
+}
+trap cleanup EXIT
+
 PASSED=0
 FAILED=0
 TOTAL=0
