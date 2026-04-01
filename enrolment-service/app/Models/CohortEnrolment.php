@@ -18,7 +18,7 @@ declare(strict_types=1);
  *  - We need two distinct statuses visible in queries (enrolled vs removed)
  *  - The removed_at timestamp records WHEN the removal happened (for audit trail)
  *  - Both active and removed records appear in CSV exports and statistics
- *  - Re-enrolment after removal is explicitly blocked (duplicate check includes removed)
+ *  - Re-enrolment after removal is allowed (duplicate check only looks for status='enrolled')
  *
  * Records are NEVER hard-deleted from the database. This preserves the full audit
  * trail for reporting, CSV export, and compliance requirements.
