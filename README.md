@@ -84,11 +84,11 @@ curl -4 -H "Authorization: Bearer <jwt-token>" http://localhost:8001/api/school/
 | Role | Permissions |
 |------|-------------|
 | `school_admin` | Unrestricted. Read all screens (dashboard overview, reporting, statistics), create/edit/archive experiences, manage cohorts, enrol/remove students. |
-| `school_teacher` | Can create/edit/archive experiences and manage cohorts (create, update, activate, complete) per workpack. Cannot enrol/remove students (admin-only). Read access to dashboard overview, reporting, widgets, and all experience/enrolment data. |
+| `school_teacher` | Can create/edit/archive experiences and manage cohorts (create, update, activate, complete) per workpack. Cannot enrol/remove students (admin-only). No access to dashboard overview or reporting screens (Screen 300 is admin-only). Can view individual student drill-downs. Read access to all experience and enrolment data. |
 | `student` | Read own enrolments, progress, and credentials only. |
 | `parent` | Read linked children's data only. Backend enforces parent-child link verification. |
 
-Experience and cohort write operations return `403` for `student` and `parent` roles. Enrol/remove operations return `403` for all non-admin roles. Dashboard overview, reporting, and widgets return `403` for `student` and `parent` roles. Missing or invalid tokens return `401`.
+Experience and cohort write operations return `403` for `student` and `parent` roles. Enrol/remove operations return `403` for all non-admin roles. Dashboard overview, reporting, and widgets return `403` for all non-admin roles. Missing or invalid tokens return `401`.
 
 Parent-child links use the `parent_student_links` join table (columns: `parent_id`, `student_id`). The backend verifies the parent-child relationship before returning any student data.
 
@@ -266,12 +266,12 @@ A `schools` record must exist before creating users that reference it.
 
 | Method | Endpoint | Auth | Purpose |
 |--------|----------|------|---------|
-| GET | `/api/school/dashboard` | Admin/Teacher | Full dashboard overview with KPIs |
+| GET | `/api/school/dashboard` | Admin only | Full dashboard overview with KPIs |
 | GET | `/api/school/dashboard/students/{id}` | All roles (scoped) | Student drill-down with progress, credentials, curriculum mapping |
-| GET | `/api/school/dashboard/widgets` | Admin/Teacher | All dashboard widgets |
-| GET | `/api/school/dashboard/widgets/{type}` | Admin/Teacher | Single widget (`cohort_summary`, `student_table`, `engagement_chart`) |
-| GET | `/api/school/dashboard/reporting/pos-coverage` | Admin/Teacher | Curriculum coverage reporting |
-| GET | `/api/school/dashboard/reporting/engagement` | Admin/Teacher | Engagement rates |
+| GET | `/api/school/dashboard/widgets` | Admin only | All dashboard widgets |
+| GET | `/api/school/dashboard/widgets/{type}` | Admin only | Single widget (`cohort_summary`, `student_table`, `engagement_chart`) |
+| GET | `/api/school/dashboard/reporting/pos-coverage` | Admin only | Curriculum coverage reporting |
+| GET | `/api/school/dashboard/reporting/engagement` | Admin only | Engagement rates |
 | GET | `/api/school/dashboard/health` | Public | Health check |
 
 ### Experience Service (Port 8002)
