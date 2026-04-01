@@ -140,7 +140,7 @@ class DataIntegrityTest extends TestCase
                 'name' => $input,
                 'start_date' => '2026-04-01',
                 'end_date' => '2026-08-01',
-            ], $this->teacherHeaders());
+            ], $this->adminHeaders());
 
             $response->assertStatus(201, "Failed to create cohort for case: {$label}");
 
@@ -414,7 +414,7 @@ class DataIntegrityTest extends TestCase
             'name' => $name,
             'start_date' => '2026-04-01',
             'end_date' => '2026-08-01',
-        ], $this->teacherHeaders());
+        ], $this->adminHeaders());
 
         $response->assertStatus(201);
 
@@ -454,7 +454,7 @@ class DataIntegrityTest extends TestCase
 
         $response = $this->putJson("/api/school/cohorts/{$original->id}", [
             'name' => $newName,
-        ], $this->teacherHeaders());
+        ], $this->adminHeaders());
 
         $response->assertStatus(200);
         $this->assertSame($newName, $response->json('name'));

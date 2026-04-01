@@ -84,11 +84,11 @@ curl -4 -H "Authorization: Bearer <jwt-token>" http://localhost:8001/api/school/
 | Role | Permissions |
 |------|-------------|
 | `school_admin` | Unrestricted. Read all screens (dashboard overview, reporting, statistics), create/edit/archive experiences, manage cohorts, enrol/remove students. |
-| `school_teacher` | Create/edit/archive experiences, manage cohorts, enrol/remove students. No access to dashboard overview or reporting screens. |
+| `school_teacher` | Read-only access to experience and enrolment data. No access to dashboard overview or reporting screens. Cannot create/edit/archive experiences, manage cohorts, or enrol/remove students — all write operations are admin-only (screens 300-303 are admin screens). |
 | `student` | Read own enrolments, progress, and credentials only. |
 | `parent` | Read linked children's data only. Backend enforces parent-child link verification. |
 
-Write operations return `403` for `student` and `parent` roles. Missing or invalid tokens return `401`.
+Write operations return `403` for all non-admin roles (`school_teacher`, `student`, `parent`). Missing or invalid tokens return `401`.
 
 Parent-child links use the `parent_student_links` join table (columns: `parent_id`, `student_id`). The backend verifies the parent-child relationship before returning any student data.
 

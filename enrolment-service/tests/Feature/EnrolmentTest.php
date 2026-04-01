@@ -91,6 +91,11 @@ class EnrolmentTest extends TestCase
         return ['Authorization' => 'Bearer test-admin-token'];
     }
 
+    private function teacherAuthHeaders(): array
+    {
+        return ['Authorization' => 'Bearer test-teacher-token'];
+    }
+
     public function test_can_enrol_student(): void
     {
         $response = $this->postJson("/api/school/cohorts/{$this->activeCohort->id}/enrolments", [
@@ -1228,5 +1233,46 @@ class EnrolmentTest extends TestCase
                 && $event->removedAt instanceof \DateTimeInterface
                 && $event->removedAt == $event->enrolment->removed_at;
         });
+    }
+
+    /**
+     * Teacher role restriction tests — screens 300-303 are admin-only.
+     * Enrol/remove operations must return 403 for teachers.
+     */
+
+    public function test_teacher_cannot_enrol_student(): void
+    {
+        $response = $this->postJson("/api/school/cohorts/{$this->activeCohort->id}/enrolments", [
+            'student_id' => $this->student->id,
+        ], $this->teacherAuthHeaders());
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    public function test_teacher_cannot_remove_student(): void
+    {
+        CohortEnrolment::create([
+            'cohort_id' => $this->activeCohort->id,
+            'student_id' => $this->student->id,
+            'status' => 'enrolled',
+            'enrolled_at' => now(),
+        ]);
+
+        $response = $this->deleteJson(
+            "/api/school/cohorts/{$this->activeCohort->id}/enrolments/{$this->student->id}",
+            [],
+            $this->teacherAuthHeaders()
+        );
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    public function test_teacher_can_read_enrolments(): void
+    {
+        $response = $this->getJson('/api/school/enrolments', $this->teacherAuthHeaders());
+
+        $response->assertStatus(200);
     }
 }

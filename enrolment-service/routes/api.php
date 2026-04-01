@@ -109,7 +109,7 @@ Route::prefix('school')->group(function () {
         Route::get('enrolments/export', [EnrolmentController::class, 'export']);
     });
 
-    // Write endpoints — admin and teacher only (no student access).
+    // Write endpoints — admin only (screens 300-303 are admin screens).
     Route::middleware('auth.role')->group(function () {
         Route::post('cohorts', [CohortController::class, 'store']);
         Route::put('cohorts/{id}', [CohortController::class, 'update'])->where('id', '[0-9]+');

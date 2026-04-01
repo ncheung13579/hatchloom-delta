@@ -28,6 +28,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Traits\RequiresTeacherAdmin;
 use App\Http\Controllers\Traits\SanitizesCsvOutput;
 use App\Models\Cohort;
 use App\Models\CohortEnrolment;
@@ -48,6 +49,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class EnrolmentController extends Controller
 {
+    use RequiresTeacherAdmin;
     use SanitizesCsvOutput;
 
     /**
@@ -144,6 +146,10 @@ class EnrolmentController extends Controller
      */
     public function enrol(Request $request, int $cohortId): JsonResponse
     {
+        if ($denied = $this->authorizeTeacherAdmin('enrol students')) {
+            return $denied;
+        }
+
         $validated = $request->validate(['student_id' => 'required|integer']);
         $studentId = $validated['student_id'];
 
@@ -224,6 +230,10 @@ class EnrolmentController extends Controller
      */
     public function remove(int $cohortId, int $studentId): JsonResponse
     {
+        if ($denied = $this->authorizeTeacherAdmin('remove students')) {
+            return $denied;
+        }
+
         $cohort = Cohort::find($cohortId);
 
         if (!$cohort) {

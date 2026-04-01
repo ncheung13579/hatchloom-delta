@@ -114,7 +114,7 @@ class DataIntegrityTest extends TestCase
                 'name' => $input,
                 'description' => "Description for {$label}",
                 'course_ids' => [1],
-            ], $this->teacherHeaders());
+            ], $this->adminHeaders());
 
             $response->assertStatus(201, "Failed to create experience for case: {$label}");
 
@@ -162,7 +162,7 @@ class DataIntegrityTest extends TestCase
                 'name' => "Exp for {$label}",
                 'description' => $input,
                 'course_ids' => [1],
-            ], $this->teacherHeaders());
+            ], $this->adminHeaders());
 
             $response->assertStatus(201, "Failed to create for case: {$label}");
 
@@ -202,7 +202,7 @@ class DataIntegrityTest extends TestCase
         $response = $this->putJson("/api/school/experiences/{$experience->id}", [
             'name' => $newName,
             'description' => $newDesc,
-        ], $this->teacherHeaders());
+        ], $this->adminHeaders());
 
         $response->assertStatus(200);
         $this->assertSame($newName, $response->json('name'));
@@ -395,7 +395,7 @@ class DataIntegrityTest extends TestCase
             'name' => $name,
             'description' => $desc,
             'course_ids' => [1],
-        ], $this->teacherHeaders());
+        ], $this->adminHeaders());
 
         $response->assertStatus(201);
         $this->assertStringContainsString('application/json', $response->headers->get('Content-Type'));

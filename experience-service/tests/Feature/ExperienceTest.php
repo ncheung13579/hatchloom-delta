@@ -110,7 +110,7 @@ class ExperienceTest extends TestCase
             'name' => 'New Experience',
             'description' => 'A test experience',
             'course_ids' => [1, 2],
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(201)
             ->assertJsonFragment(['name' => 'New Experience']);
@@ -122,7 +122,7 @@ class ExperienceTest extends TestCase
     {
         $response = $this->postJson('/api/school/experiences', [
             'description' => 'Missing name',
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(422);
     }
@@ -513,7 +513,7 @@ class ExperienceTest extends TestCase
         $response = $this->putJson("/api/school/experiences/{$experience->id}", [
             'name' => 'Updated Name',
             'description' => 'Updated description',
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(200)
             ->assertJsonFragment(['name' => 'Updated Name']);
@@ -544,7 +544,7 @@ class ExperienceTest extends TestCase
         // Replace courses entirely
         $response = $this->putJson("/api/school/experiences/{$experience->id}", [
             'course_ids' => [2, 3],
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(200);
 
@@ -575,7 +575,7 @@ class ExperienceTest extends TestCase
             'created_by' => $this->admin->id,
         ]);
 
-        $response = $this->deleteJson("/api/school/experiences/{$experience->id}", [], $this->teacherAuthHeaders());
+        $response = $this->deleteJson("/api/school/experiences/{$experience->id}", [], $this->authHeaders());
 
         $response->assertStatus(200)
             ->assertJsonFragment(['message' => 'Experience archived']);
@@ -593,7 +593,7 @@ class ExperienceTest extends TestCase
 
     public function test_delete_nonexistent_experience_returns_404(): void
     {
-        $response = $this->deleteJson('/api/school/experiences/9999', [], $this->teacherAuthHeaders());
+        $response = $this->deleteJson('/api/school/experiences/9999', [], $this->authHeaders());
 
         $response->assertStatus(404);
     }
@@ -604,7 +604,7 @@ class ExperienceTest extends TestCase
             'name' => 'Bad Experience',
             'description' => 'Has invalid courses',
             'course_ids' => [999, 888],
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(422)
             ->assertJsonFragment(['message' => 'One or more course IDs are invalid']);
@@ -622,7 +622,7 @@ class ExperienceTest extends TestCase
 
         $response = $this->putJson("/api/school/experiences/{$experience->id}", [
             'course_ids' => [999],
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(422)
             ->assertJsonFragment(['message' => 'One or more course IDs are invalid']);
@@ -645,7 +645,7 @@ class ExperienceTest extends TestCase
             'name' => '',
             'description' => 'Has empty name',
             'course_ids' => [1],
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(422);
     }
@@ -656,7 +656,7 @@ class ExperienceTest extends TestCase
             'name' => str_repeat('A', 256),
             'description' => 'Name exceeds 255 chars',
             'course_ids' => [1],
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(422);
     }
@@ -667,7 +667,7 @@ class ExperienceTest extends TestCase
             'name' => 'No Courses',
             'description' => 'Empty course array',
             'course_ids' => [],
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(422);
     }
@@ -719,7 +719,7 @@ class ExperienceTest extends TestCase
             'name' => 'Full Response Check',
             'description' => 'Verify courses in response',
             'course_ids' => [1, 3],
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(201)
             ->assertJsonStructure([
@@ -806,7 +806,7 @@ class ExperienceTest extends TestCase
             'name' => 'Bad Courses',
             'description' => 'Invalid course IDs',
             'course_ids' => [999],
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(422)
             ->assertJsonStructure(['error', 'message', 'code'])
@@ -895,7 +895,7 @@ class ExperienceTest extends TestCase
             'name' => '   ',
             'description' => 'Valid description',
             'course_ids' => [1],
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(422);
     }
@@ -912,7 +912,7 @@ class ExperienceTest extends TestCase
 
         $response = $this->putJson("/api/school/experiences/{$experience->id}", [
             'name' => '   ',
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(422);
     }
@@ -925,7 +925,7 @@ class ExperienceTest extends TestCase
             'name' => 'Valid Name',
             'description' => str_repeat('A', 5001),
             'course_ids' => [1],
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(422);
     }
@@ -936,7 +936,7 @@ class ExperienceTest extends TestCase
             'name' => 'Valid Name',
             'description' => str_repeat('A', 5000),
             'course_ids' => [1],
-        ], $this->teacherAuthHeaders());
+        ], $this->authHeaders());
 
         $response->assertStatus(201);
     }
@@ -1035,7 +1035,7 @@ class ExperienceTest extends TestCase
         ]);
 
         // Archive via the API (sets status='archived' + soft-deletes)
-        $this->deleteJson("/api/school/experiences/{$toArchive->id}", [], $this->teacherAuthHeaders())
+        $this->deleteJson("/api/school/experiences/{$toArchive->id}", [], $this->authHeaders())
             ->assertStatus(200);
 
         $response = $this->getJson('/api/school/experiences', $this->authHeaders());
@@ -1137,5 +1137,71 @@ class ExperienceTest extends TestCase
                 'error' => true,
                 'code' => 'METHOD_NOT_ALLOWED',
             ]);
+    }
+
+    /**
+     * Teacher role restriction tests — screens 300-303 are admin-only.
+     * All write operations must return 403 for teachers.
+     */
+
+    public function test_teacher_cannot_create_experience(): void
+    {
+        $response = $this->postJson('/api/school/experiences', [
+            'name' => 'Teacher Experience',
+            'description' => 'Should be blocked',
+            'course_ids' => [1],
+        ], $this->teacherAuthHeaders());
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    public function test_teacher_cannot_update_experience(): void
+    {
+        $experience = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Existing Experience',
+            'description' => 'Original',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->putJson("/api/school/experiences/{$experience->id}", [
+            'name' => 'Updated By Teacher',
+        ], $this->teacherAuthHeaders());
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    public function test_teacher_cannot_delete_experience(): void
+    {
+        $experience = Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'To Delete',
+            'description' => 'Should not be deleted by teacher',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->deleteJson("/api/school/experiences/{$experience->id}", [], $this->teacherAuthHeaders());
+
+        $response->assertStatus(403)
+            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+    }
+
+    public function test_teacher_can_read_experiences(): void
+    {
+        Experience::create([
+            'school_id' => $this->school->id,
+            'name' => 'Readable Experience',
+            'description' => 'Teacher can read',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->getJson('/api/school/experiences', $this->teacherAuthHeaders());
+
+        $response->assertStatus(200);
     }
 }
