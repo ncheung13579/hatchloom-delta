@@ -40,7 +40,7 @@ jobs:
           php-version: '8.2'
           extensions: pdo_pgsql
       - run: composer install --prefer-dist --no-progress
-      - run: cp .env.testing .env && php artisan key:generate
+      - run: cp .env.example .env && php artisan key:generate
       - run: php artisan migrate --force
       - run: vendor/bin/phpunit --colors=always
 
@@ -77,7 +77,7 @@ jobs:
           php-version: '8.2'
           extensions: pdo_pgsql
       - run: composer install --prefer-dist --no-progress
-      - run: cp .env.testing .env && php artisan key:generate
+      - run: cp .env.example .env && php artisan key:generate
       - run: php artisan migrate --force
       - run: vendor/bin/phpunit --colors=always
 
