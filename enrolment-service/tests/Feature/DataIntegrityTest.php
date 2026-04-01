@@ -9,7 +9,7 @@ use App\Models\CohortEnrolment;
 use App\Models\Experience;
 use App\Models\School;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
@@ -26,7 +26,7 @@ use Tests\TestCase;
  */
 class DataIntegrityTest extends TestCase
 {
-    use DatabaseMigrations;
+    use RefreshDatabase;
 
     private School $school;
     private Experience $experience;
@@ -140,7 +140,7 @@ class DataIntegrityTest extends TestCase
                 'name' => $input,
                 'start_date' => '2026-04-01',
                 'end_date' => '2026-08-01',
-            ], $this->adminHeaders());
+            ], $this->teacherHeaders());
 
             $response->assertStatus(201, "Failed to create cohort for case: {$label}");
 
@@ -162,7 +162,7 @@ class DataIntegrityTest extends TestCase
             );
 
             // Verify GET endpoint returns exact input
-            $getResponse = $this->getJson("/api/school/cohorts/{$id}", $this->adminHeaders());
+            $getResponse = $this->getJson("/api/school/cohorts/{$id}", $this->teacherHeaders());
             $getResponse->assertStatus(200);
             $this->assertSame(
                 $input,
@@ -414,7 +414,7 @@ class DataIntegrityTest extends TestCase
             'name' => $name,
             'start_date' => '2026-04-01',
             'end_date' => '2026-08-01',
-        ], $this->adminHeaders());
+        ], $this->teacherHeaders());
 
         $response->assertStatus(201);
 
@@ -454,7 +454,7 @@ class DataIntegrityTest extends TestCase
 
         $response = $this->putJson("/api/school/cohorts/{$original->id}", [
             'name' => $newName,
-        ], $this->adminHeaders());
+        ], $this->teacherHeaders());
 
         $response->assertStatus(200);
         $this->assertSame($newName, $response->json('name'));

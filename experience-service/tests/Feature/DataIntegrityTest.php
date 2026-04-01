@@ -7,7 +7,7 @@ namespace Tests\Feature;
 use App\Models\Experience;
 use App\Models\School;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -21,7 +21,7 @@ use Tests\TestCase;
  */
 class DataIntegrityTest extends TestCase
 {
-    use DatabaseMigrations;
+    use RefreshDatabase;
 
     private School $school;
     private User $admin;
@@ -114,7 +114,7 @@ class DataIntegrityTest extends TestCase
                 'name' => $input,
                 'description' => "Description for {$label}",
                 'course_ids' => [1],
-            ], $this->adminHeaders());
+            ], $this->teacherHeaders());
 
             $response->assertStatus(201, "Failed to create experience for case: {$label}");
 
@@ -136,7 +136,7 @@ class DataIntegrityTest extends TestCase
             );
 
             // Verify GET endpoint returns exact input
-            $getResponse = $this->getJson("/api/school/experiences/{$id}", $this->adminHeaders());
+            $getResponse = $this->getJson("/api/school/experiences/{$id}", $this->teacherHeaders());
             $getResponse->assertStatus(200);
             $this->assertSame(
                 $input,
@@ -162,7 +162,7 @@ class DataIntegrityTest extends TestCase
                 'name' => "Exp for {$label}",
                 'description' => $input,
                 'course_ids' => [1],
-            ], $this->adminHeaders());
+            ], $this->teacherHeaders());
 
             $response->assertStatus(201, "Failed to create for case: {$label}");
 
@@ -202,7 +202,7 @@ class DataIntegrityTest extends TestCase
         $response = $this->putJson("/api/school/experiences/{$experience->id}", [
             'name' => $newName,
             'description' => $newDesc,
-        ], $this->adminHeaders());
+        ], $this->teacherHeaders());
 
         $response->assertStatus(200);
         $this->assertSame($newName, $response->json('name'));
@@ -395,7 +395,7 @@ class DataIntegrityTest extends TestCase
             'name' => $name,
             'description' => $desc,
             'course_ids' => [1],
-        ], $this->adminHeaders());
+        ], $this->teacherHeaders());
 
         $response->assertStatus(201);
         $this->assertStringContainsString('application/json', $response->headers->get('Content-Type'));

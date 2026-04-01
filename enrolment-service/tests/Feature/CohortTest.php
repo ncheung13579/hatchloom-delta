@@ -8,12 +8,12 @@ use App\Models\Cohort;
 use App\Models\Experience;
 use App\Models\School;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class CohortTest extends TestCase
 {
-    use DatabaseMigrations;
+    use RefreshDatabase;
 
     private User $admin;
     private User $teacher;
@@ -845,11 +845,11 @@ class CohortTest extends TestCase
     }
 
     /**
-     * Teacher role restriction tests — screens 300-303 are admin-only.
-     * All write operations must return 403 for teachers.
+     * Teacher role permission tests — per workpack, teachers run cohorts.
+     * Teachers must be able to create, update, activate, and complete cohorts.
      */
 
-    public function test_teacher_cannot_create_cohort(): void
+    public function test_teacher_can_create_cohort(): void
     {
         $response = $this->postJson('/api/school/cohorts', [
             'experience_id' => $this->experience->id,
@@ -859,11 +859,11 @@ class CohortTest extends TestCase
             'capacity' => 30,
         ], $this->teacherAuthHeaders());
 
-        $response->assertStatus(403)
-            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+        $response->assertStatus(201)
+            ->assertJsonFragment(['name' => 'Teacher Cohort', 'status' => 'not_started']);
     }
 
-    public function test_teacher_cannot_update_cohort(): void
+    public function test_teacher_can_update_cohort(): void
     {
         $cohort = Cohort::create([
             'experience_id' => $this->experience->id,
@@ -879,11 +879,11 @@ class CohortTest extends TestCase
             'name' => 'Updated By Teacher',
         ], $this->teacherAuthHeaders());
 
-        $response->assertStatus(403)
-            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+        $response->assertStatus(200)
+            ->assertJsonFragment(['name' => 'Updated By Teacher']);
     }
 
-    public function test_teacher_cannot_activate_cohort(): void
+    public function test_teacher_can_activate_cohort(): void
     {
         $cohort = Cohort::create([
             'experience_id' => $this->experience->id,
@@ -896,11 +896,11 @@ class CohortTest extends TestCase
 
         $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/activate", [], $this->teacherAuthHeaders());
 
-        $response->assertStatus(403)
-            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+        $response->assertStatus(200)
+            ->assertJsonFragment(['status' => 'active']);
     }
 
-    public function test_teacher_cannot_complete_cohort(): void
+    public function test_teacher_can_complete_cohort(): void
     {
         $cohort = Cohort::create([
             'experience_id' => $this->experience->id,
@@ -913,8 +913,8 @@ class CohortTest extends TestCase
 
         $response = $this->patchJson("/api/school/cohorts/{$cohort->id}/complete", [], $this->teacherAuthHeaders());
 
-        $response->assertStatus(403)
-            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+        $response->assertStatus(200)
+            ->assertJsonFragment(['status' => 'completed']);
     }
 
     public function test_teacher_can_read_cohorts(): void
@@ -932,5 +932,92 @@ class CohortTest extends TestCase
         $response = $this->getJson('/api/school/cohorts', $this->teacherAuthHeaders());
 
         $response->assertStatus(200);
+    }
+
+    // ── Cross-school security ─────────────────────────────────
+
+    public function test_cannot_create_cohort_with_other_schools_experience(): void
+    {
+        $otherSchool = School::create([
+            'name' => 'Other Academy',
+            'code' => 'OTHER',
+            'is_active' => true,
+        ]);
+
+        $otherExperience = Experience::withoutGlobalScopes()->create([
+            'school_id' => $otherSchool->id,
+            'name' => 'Foreign Experience',
+            'description' => 'Belongs to another school',
+            'status' => 'active',
+            'created_by' => $this->admin->id,
+        ]);
+
+        $response = $this->postJson('/api/school/cohorts', [
+            'experience_id' => $otherExperience->id,
+            'name' => 'Cross-School Cohort',
+            'start_date' => '2026-04-01',
+            'end_date' => '2026-08-01',
+        ], $this->authHeaders());
+
+        $response->assertStatus(422);
+    }
+
+    public function test_cannot_create_cohort_with_other_schools_teacher(): void
+    {
+        $otherSchool = School::create([
+            'name' => 'Other Academy',
+            'code' => 'OTHER',
+            'is_active' => true,
+        ]);
+
+        $otherTeacher = User::create([
+            'name' => 'Foreign Teacher',
+            'email' => 'teacher@other.edu',
+            'password' => bcrypt('password'),
+            'role' => 'school_teacher',
+            'school_id' => $otherSchool->id,
+        ]);
+
+        $response = $this->postJson('/api/school/cohorts', [
+            'experience_id' => $this->experience->id,
+            'name' => 'Cross-School Teacher Cohort',
+            'start_date' => '2026-04-01',
+            'end_date' => '2026-08-01',
+            'teacher_id' => $otherTeacher->id,
+        ], $this->authHeaders());
+
+        $response->assertStatus(422);
+    }
+
+    public function test_cannot_update_cohort_with_other_schools_teacher(): void
+    {
+        $otherSchool = School::create([
+            'name' => 'Other Academy',
+            'code' => 'OTHER',
+            'is_active' => true,
+        ]);
+
+        $otherTeacher = User::create([
+            'name' => 'Foreign Teacher',
+            'email' => 'teacher@other.edu',
+            'password' => bcrypt('password'),
+            'role' => 'school_teacher',
+            'school_id' => $otherSchool->id,
+        ]);
+
+        $cohort = Cohort::create([
+            'experience_id' => $this->experience->id,
+            'school_id' => $this->school->id,
+            'name' => 'Existing Cohort',
+            'status' => 'not_started',
+            'start_date' => '2026-04-01',
+            'end_date' => '2026-08-01',
+        ]);
+
+        $response = $this->putJson("/api/school/cohorts/{$cohort->id}", [
+            'teacher_id' => $otherTeacher->id,
+        ], $this->authHeaders());
+
+        $response->assertStatus(422);
     }
 }

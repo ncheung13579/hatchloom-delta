@@ -7,14 +7,14 @@ namespace Tests\Feature;
 use App\Http\Middleware\HttpAuthMiddleware;
 use App\Models\School;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class HttpAuthMiddlewareTest extends TestCase
 {
-    use DatabaseMigrations;
+    use RefreshDatabase;
 
     private School $school;
     private User $admin;

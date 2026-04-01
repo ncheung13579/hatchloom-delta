@@ -8,13 +8,13 @@ use App\Models\Experience;
 use App\Models\ExperienceCourse;
 use App\Models\School;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class ExperienceTest extends TestCase
 {
-    use DatabaseMigrations;
+    use RefreshDatabase;
 
     private User $admin;
     private User $teacher;
@@ -1140,54 +1140,54 @@ class ExperienceTest extends TestCase
     }
 
     /**
-     * Teacher role restriction tests — screens 300-303 are admin-only.
-     * All write operations must return 403 for teachers.
+     * Teacher role permission tests — per workpack, teachers build experiences.
+     * Teachers must be able to create, update, and archive experiences.
      */
 
-    public function test_teacher_cannot_create_experience(): void
+    public function test_teacher_can_create_experience(): void
     {
         $response = $this->postJson('/api/school/experiences', [
             'name' => 'Teacher Experience',
-            'description' => 'Should be blocked',
+            'description' => 'Created by teacher',
             'course_ids' => [1],
         ], $this->teacherAuthHeaders());
 
-        $response->assertStatus(403)
-            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+        $response->assertStatus(201)
+            ->assertJsonFragment(['name' => 'Teacher Experience']);
     }
 
-    public function test_teacher_cannot_update_experience(): void
+    public function test_teacher_can_update_experience(): void
     {
         $experience = Experience::create([
             'school_id' => $this->school->id,
             'name' => 'Existing Experience',
             'description' => 'Original',
             'status' => 'active',
-            'created_by' => $this->admin->id,
+            'created_by' => $this->teacher->id,
         ]);
 
         $response = $this->putJson("/api/school/experiences/{$experience->id}", [
             'name' => 'Updated By Teacher',
         ], $this->teacherAuthHeaders());
 
-        $response->assertStatus(403)
-            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+        $response->assertStatus(200)
+            ->assertJsonFragment(['name' => 'Updated By Teacher']);
     }
 
-    public function test_teacher_cannot_delete_experience(): void
+    public function test_teacher_can_delete_experience(): void
     {
         $experience = Experience::create([
             'school_id' => $this->school->id,
-            'name' => 'To Delete',
-            'description' => 'Should not be deleted by teacher',
+            'name' => 'To Archive',
+            'description' => 'Teacher can archive',
             'status' => 'active',
-            'created_by' => $this->admin->id,
+            'created_by' => $this->teacher->id,
         ]);
 
         $response = $this->deleteJson("/api/school/experiences/{$experience->id}", [], $this->teacherAuthHeaders());
 
-        $response->assertStatus(403)
-            ->assertJsonFragment(['code' => 'FORBIDDEN']);
+        $response->assertStatus(200)
+            ->assertJsonFragment(['message' => 'Experience archived']);
     }
 
     public function test_teacher_can_read_experiences(): void

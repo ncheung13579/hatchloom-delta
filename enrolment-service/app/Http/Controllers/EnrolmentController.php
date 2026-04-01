@@ -146,8 +146,10 @@ class EnrolmentController extends Controller
      */
     public function enrol(Request $request, int $cohortId): JsonResponse
     {
-        if ($denied = $this->authorizeTeacherAdmin('enrol students')) {
-            return $denied;
+        // Enrolment is admin-only per workpack ("School Admin can add/remove students").
+        // This is separate from the trait's admin+teacher check used by cohort CRUD.
+        if (Auth::user()->role !== 'school_admin') {
+            return $this->errorResponse('Only school admins can enrol students', 'FORBIDDEN', 403);
         }
 
         $validated = $request->validate(['student_id' => 'required|integer']);
@@ -230,8 +232,9 @@ class EnrolmentController extends Controller
      */
     public function remove(int $cohortId, int $studentId): JsonResponse
     {
-        if ($denied = $this->authorizeTeacherAdmin('remove students')) {
-            return $denied;
+        // Removal is admin-only per workpack ("School Admin can add/remove students").
+        if (Auth::user()->role !== 'school_admin') {
+            return $this->errorResponse('Only school admins can remove students', 'FORBIDDEN', 403);
         }
 
         $cohort = Cohort::find($cohortId);

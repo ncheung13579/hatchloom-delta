@@ -35,6 +35,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 /**
  * REST controller for cohort management (CRUD + state transitions).
@@ -106,13 +107,21 @@ class CohortController extends Controller
             return $denied;
         }
 
+        $schoolId = Auth::user()->school_id;
+
         $validated = $request->validate([
-            'experience_id' => 'required|integer|exists:experiences,id',
+            'experience_id' => [
+                'required', 'integer',
+                Rule::exists('experiences', 'id')->where('school_id', $schoolId),
+            ],
             'name' => ['required', 'string', 'max:255', 'regex:/\S/'],
             'start_date' => 'required|date|after_or_equal:today',
             'end_date' => 'required|date|after:start_date',
             'capacity' => 'nullable|integer|min:1|max:10000',
-            'teacher_id' => 'nullable|integer|exists:users,id',
+            'teacher_id' => [
+                'nullable', 'integer',
+                Rule::exists('users', 'id')->where('school_id', $schoolId),
+            ],
         ]);
 
         // CohortService assigns the authenticated user's school_id automatically
@@ -173,7 +182,10 @@ class CohortController extends Controller
             'start_date' => 'sometimes|date',
             'end_date' => 'sometimes|date|after:start_date',
             'capacity' => 'sometimes|integer|min:1|max:10000',
-            'teacher_id' => 'sometimes|integer|exists:users,id',
+            'teacher_id' => [
+                'sometimes', 'integer',
+                Rule::exists('users', 'id')->where('school_id', Auth::user()->school_id),
+            ],
         ]);
 
         $cohort = $this->cohortService->updateCohort($cohort, $validated);

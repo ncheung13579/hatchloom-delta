@@ -7,14 +7,14 @@ namespace Tests\Feature;
 use App\Models\School;
 use App\Models\User;
 use App\Services\HttpCourseDataProvider;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class HttpCourseDataProviderTest extends TestCase
 {
-    use DatabaseMigrations;
+    use RefreshDatabase;
 
     private HttpCourseDataProvider $provider;
 

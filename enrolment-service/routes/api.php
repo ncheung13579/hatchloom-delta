@@ -109,7 +109,8 @@ Route::prefix('school')->group(function () {
         Route::get('enrolments/export', [EnrolmentController::class, 'export']);
     });
 
-    // Write endpoints — admin only (screens 300-303 are admin screens).
+    // Write endpoints — cohort CRUD is admin+teacher (per workpack, teachers run cohorts),
+    // enrol/remove is admin-only (per workpack, only admin can add/remove students).
     Route::middleware('auth.role')->group(function () {
         Route::post('cohorts', [CohortController::class, 'store']);
         Route::put('cohorts/{id}', [CohortController::class, 'update'])->where('id', '[0-9]+');
@@ -119,8 +120,8 @@ Route::prefix('school')->group(function () {
         Route::patch('cohorts/{id}/activate', [CohortController::class, 'activate'])->where('id', '[0-9]+');
         Route::patch('cohorts/{id}/complete', [CohortController::class, 'complete'])->where('id', '[0-9]+');
 
-        // Enrolment operations — nested under cohorts because enrolments belong
-        // to a specific cohort.
+        // Enrolment operations — admin-only, nested under cohorts because
+        // enrolments belong to a specific cohort.
         Route::post('cohorts/{cohortId}/enrolments', [EnrolmentController::class, 'enrol'])->where('cohortId', '[0-9]+');
         Route::delete('cohorts/{cohortId}/enrolments/{studentId}', [EnrolmentController::class, 'remove'])->where(['cohortId' => '[0-9]+', 'studentId' => '[0-9]+']);
     });

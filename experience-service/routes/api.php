@@ -106,7 +106,7 @@ Route::prefix('school')->group(function () {
         Route::get('experiences/{id}/statistics', [ExperienceScreenController::class, 'statistics'])->where('id', '[0-9]+');
     });
 
-    // Write endpoints — admin only (screens 300-303 are admin screens).
+    // Write endpoints — admin and teacher (per workpack, teachers build experiences).
     Route::middleware('auth.role')->group(function () {
         Route::post('experiences', [ExperienceController::class, 'store']);
         Route::put('experiences/{id}', [ExperienceController::class, 'update'])->where('id', '[0-9]+');

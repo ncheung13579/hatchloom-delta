@@ -8,29 +8,26 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 
 /**
- * Provides a reusable role-check guard for admin-only write actions.
+ * Provides a reusable role-check guard for admin/teacher write actions.
  *
- * Screens 300-303 are school admin screens. All write operations
- * (create/edit/delete experiences, manage cohorts, enrol/remove students)
- * are admin-only. Teachers access data through their own teacher-facing
- * interfaces and have read-only access to these services.
- *
- * Trait name kept as RequiresTeacherAdmin for backwards compatibility
- * with existing controller references.
+ * Per the workpack, teachers "build the Experience and run the Cohorts",
+ * so experience CRUD and cohort management require admin OR teacher role.
+ * Only student enrol/remove is admin-only (handled separately in
+ * EnrolmentController with its own guard).
  */
 trait RequiresTeacherAdmin
 {
     /**
-     * Returns a 403 response if the authenticated user is not a school admin.
+     * Returns a 403 response if the authenticated user is not a teacher or admin.
      * Returns null if the user is authorized to proceed.
      */
     private function authorizeTeacherAdmin(string $action): ?JsonResponse
     {
         $role = Auth::user()->role;
-        if ($role !== 'school_admin') {
+        if (!in_array($role, ['school_teacher', 'school_admin'], true)) {
             return response()->json([
                 'error' => true,
-                'message' => "Only school admins can {$action}",
+                'message' => "Only school teachers and admins can {$action}",
                 'code' => 'FORBIDDEN',
             ], 403);
         }

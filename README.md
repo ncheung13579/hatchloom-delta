@@ -84,11 +84,11 @@ curl -4 -H "Authorization: Bearer <jwt-token>" http://localhost:8001/api/school/
 | Role | Permissions |
 |------|-------------|
 | `school_admin` | Unrestricted. Read all screens (dashboard overview, reporting, statistics), create/edit/archive experiences, manage cohorts, enrol/remove students. |
-| `school_teacher` | Read-only access to experience and enrolment data. No access to dashboard overview or reporting screens. Cannot create/edit/archive experiences, manage cohorts, or enrol/remove students — all write operations are admin-only (screens 300-303 are admin screens). |
+| `school_teacher` | Can create/edit/archive experiences and manage cohorts (create, update, activate, complete) per workpack. Cannot enrol/remove students (admin-only). Read access to dashboard overview, reporting, widgets, and all experience/enrolment data. |
 | `student` | Read own enrolments, progress, and credentials only. |
 | `parent` | Read linked children's data only. Backend enforces parent-child link verification. |
 
-Write operations return `403` for all non-admin roles (`school_teacher`, `student`, `parent`). Missing or invalid tokens return `401`.
+Experience and cohort write operations return `403` for `student` and `parent` roles. Enrol/remove operations return `403` for all non-admin roles. Dashboard overview, reporting, and widgets return `403` for `student` and `parent` roles. Missing or invalid tokens return `401`.
 
 Parent-child links use the `parent_student_links` join table (columns: `parent_id`, `student_id`). The backend verifies the parent-child relationship before returning any student data.
 
@@ -266,12 +266,12 @@ A `schools` record must exist before creating users that reference it.
 
 | Method | Endpoint | Auth | Purpose |
 |--------|----------|------|---------|
-| GET | `/api/school/dashboard` | Admin only | Full dashboard overview with KPIs |
+| GET | `/api/school/dashboard` | Admin/Teacher | Full dashboard overview with KPIs |
 | GET | `/api/school/dashboard/students/{id}` | All roles (scoped) | Student drill-down with progress, credentials, curriculum mapping |
-| GET | `/api/school/dashboard/widgets` | Admin only | All dashboard widgets |
-| GET | `/api/school/dashboard/widgets/{type}` | Admin only | Single widget (`cohort_summary`, `student_table`, `engagement_chart`) |
-| GET | `/api/school/dashboard/reporting/pos-coverage` | Admin only | Curriculum coverage reporting |
-| GET | `/api/school/dashboard/reporting/engagement` | Admin only | Engagement rates |
+| GET | `/api/school/dashboard/widgets` | Admin/Teacher | All dashboard widgets |
+| GET | `/api/school/dashboard/widgets/{type}` | Admin/Teacher | Single widget (`cohort_summary`, `student_table`, `engagement_chart`) |
+| GET | `/api/school/dashboard/reporting/pos-coverage` | Admin/Teacher | Curriculum coverage reporting |
+| GET | `/api/school/dashboard/reporting/engagement` | Admin/Teacher | Engagement rates |
 | GET | `/api/school/dashboard/health` | Public | Health check |
 
 ### Experience Service (Port 8002)
@@ -279,16 +279,16 @@ A `schools` record must exist before creating users that reference it.
 | Method | Endpoint | Auth | Purpose |
 |--------|----------|------|---------|
 | GET | `/api/school/experiences` | All roles | List experiences |
-| POST | `/api/school/experiences` | Teacher only | Create experience |
+| POST | `/api/school/experiences` | Admin/Teacher | Create experience |
 | GET | `/api/school/experiences/{id}` | All roles | Experience detail |
-| PUT | `/api/school/experiences/{id}` | Teacher only | Update experience |
-| DELETE | `/api/school/experiences/{id}` | Teacher only | Archive experience |
-| GET | `/api/school/experiences/{id}/students` | Admin/Teacher | Paginated student list |
-| GET | `/api/school/experiences/{id}/students/{studentId}` | Admin/Teacher | Student detail within experience |
+| PUT | `/api/school/experiences/{id}` | Admin/Teacher | Update experience |
+| DELETE | `/api/school/experiences/{id}` | Admin/Teacher | Archive experience |
+| GET | `/api/school/experiences/{id}/students` | All roles (scoped) | Paginated student list |
+| GET | `/api/school/experiences/{id}/students/{studentId}` | All roles (scoped) | Student detail within experience |
 | GET | `/api/school/experiences/{id}/students/export` | Admin/Teacher | CSV export of students |
 | GET | `/api/school/experiences/{id}/contents` | All roles | Course blocks and contents |
 | GET | `/api/school/experiences/{id}/statistics` | Admin/Teacher | Enrolment/completion stats |
-| GET | `/api/school/courses` | All roles | Course catalogue |
+| GET | `/api/school/courses` | Admin/Teacher | Course catalogue |
 | GET | `/api/school/experiences/health` | Public | Health check |
 
 ### Enrolment Service (Port 8003)
@@ -296,13 +296,13 @@ A `schools` record must exist before creating users that reference it.
 | Method | Endpoint | Auth | Purpose |
 |--------|----------|------|---------|
 | GET | `/api/school/cohorts` | All roles | List cohorts (filterable by `experience_id`, `status`) |
-| POST | `/api/school/cohorts` | Teacher only | Create cohort |
+| POST | `/api/school/cohorts` | Admin/Teacher | Create cohort |
 | GET | `/api/school/cohorts/{id}` | All roles | Cohort detail |
-| PUT | `/api/school/cohorts/{id}` | Teacher only | Update cohort |
-| PATCH | `/api/school/cohorts/{id}/activate` | Teacher only | Activate cohort (`not_started` → `active`) |
-| PATCH | `/api/school/cohorts/{id}/complete` | Teacher only | Complete cohort (`active` → `completed`) |
-| POST | `/api/school/cohorts/{id}/enrolments` | Admin/Teacher | Enrol student in cohort |
-| DELETE | `/api/school/cohorts/{id}/enrolments/{studentId}` | Admin/Teacher | Remove student |
+| PUT | `/api/school/cohorts/{id}` | Admin/Teacher | Update cohort |
+| PATCH | `/api/school/cohorts/{id}/activate` | Admin/Teacher | Activate cohort (`not_started` → `active`) |
+| PATCH | `/api/school/cohorts/{id}/complete` | Admin/Teacher | Complete cohort (`active` → `completed`) |
+| POST | `/api/school/cohorts/{id}/enrolments` | Admin only | Enrol student in cohort |
+| DELETE | `/api/school/cohorts/{id}/enrolments/{studentId}` | Admin only | Remove student |
 | GET | `/api/school/enrolments` | All roles | Paginated enrolment overview |
 | GET | `/api/school/enrolments/statistics` | Admin/Teacher | Aggregate stats and warnings |
 | GET | `/api/school/enrolments/export` | Admin/Teacher | CSV export (filterable by `cohort_id`, `experience_id`) |
