@@ -90,7 +90,30 @@ curl -4 -H "Authorization: Bearer <jwt-token>" http://localhost:8001/api/school/
 
 Teacher-only actions return `403` for all other roles. Missing or invalid tokens return `401`.
 
-Parent-child links use the `parent_student_links` join table. The backend verifies the parent-child relationship before returning any student data.
+Parent-child links use the `parent_student_links` join table (columns: `parent_id`, `student_id`). The backend verifies the parent-child relationship before returning any student data.
+
+### Auth Flow (How Delta Validates Tokens)
+
+On every authenticated request, Delta calls Quebec's User Service:
+
+1. **Validate token**: `GET {USER_SERVICE_URL}/auth/validate` with `Authorization: Bearer <token>` header
+   - Expected success response (HTTP 200):
+     ```json
+     { "valid": true, "userId": "<quebec-uuid>", "role": "SCHOOL_TEACHER" }
+     ```
+   - Any non-200 or `"valid": false` → Delta returns 401
+
+2. **Fetch profile**: `GET {USER_SERVICE_URL}/profile/{userId}` with the same bearer token
+   - Expected response:
+     ```json
+     { "email": "teacher@school.edu", "userId": "<uuid>", "role": "SCHOOL_TEACHER" }
+     ```
+
+3. **Local user lookup**: Delta finds the matching user in its `users` table **by email**. If no local user exists with that email, authentication fails.
+
+**Role mapping**: Quebec returns uppercase roles (`SCHOOL_ADMIN`, `SCHOOL_TEACHER`, `STUDENT`, `PARENT`). Delta lowercases them (`school_admin`, `school_teacher`, `student`, `parent`).
+
+**User sync requirement**: Delta's `users` table must be pre-populated with matching email addresses before authentication will work. Delta does not have user registration endpoints — Quebec (or whichever team owns user registration) must seed users into Delta's database directly (e.g., via SQL inserts or a shared migration). See the **Users Table Schema** section below for the required columns.
 
 ---
 
@@ -108,6 +131,18 @@ not_started  ──PATCH /activate──>  active  ──PATCH /complete──> 
 - Transitions are irreversible — a completed cohort cannot be reactivated
 
 Students can only be enrolled in `active` cohorts. A student can be enrolled in multiple cohorts across different experiences simultaneously.
+
+### Enrolment Validation Chain
+
+When enrolling a student (`POST /api/school/cohorts/{id}/enrolments`), Delta validates in order:
+
+1. Cohort exists (404 if not)
+2. Student exists, belongs to the same school, and has `role='student'` (422 if not)
+3. Cohort status is `active` (422 if not)
+4. Cohort is not at capacity (422 if full)
+5. No existing active enrolment for this student-cohort pair (422 `DUPLICATE_ENROLMENT` if exists)
+
+Removing a student (`DELETE /api/school/cohorts/{id}/enrolments/{studentId}`) is a soft-delete — the enrolment record's status changes to `removed` and `removed_at` is set. The student can be re-enrolled later.
 
 ---
 
@@ -146,6 +181,37 @@ Delta calls three external services. When `AUTH_MODE=http`, all providers make r
 | **Papa Course Service** | Course catalogue for experience creation, block data for content views, student progress/credit data | `COURSE_SERVICE_URL` |
 | **Karl's Credential Engine** | Badges, certificates, and curriculum (PoS) coverage mapping for student drill-downs | `CREDENTIAL_SERVICE_URL` |
 
+### What Delta Calls on Each External Service
+
+**Quebec User Service** (`USER_SERVICE_URL`):
+
+| Method | Endpoint | Purpose | Expected Response |
+|--------|----------|---------|-------------------|
+| GET | `/auth/validate` | JWT validation (every request) | `{ "valid": true, "userId": "<uuid>", "role": "SCHOOL_TEACHER" }` |
+| GET | `/profile/{userId}` | Fetch user email for local lookup | `{ "email": "...", "userId": "...", "role": "..." }` |
+| GET | `/profile?page=0&size=100` | Dashboard KPI: count active ventures | `{ "content": [{ "email": "...", "role": "STUDENT", "activeVentures": 3 }], "last": true }` |
+
+**Papa Course Service** (`COURSE_SERVICE_URL`):
+
+| Method | Endpoint | Purpose | Expected Response |
+|--------|----------|---------|-------------------|
+| GET | `/api/courses` | Full course catalogue | `{ "data": [{ "id": 1, "name": "...", ... }] }` |
+| GET | `/api/courses?ids[]=1&ids[]=2` | Batch course lookup by IDs | `{ "data": [{ "id": 1, "name": "...", ... }] }` |
+| GET | `/api/courses/{id}` | Single course detail | `{ "id": 1, "name": "...", ... }` |
+| GET | `/api/progress/problems-tackled?experience_ids[]=1` | KPI: problems tackled count | `{ "count": 42 }` |
+| GET | `/api/progress/credit-progress?experience_ids[]=1` | KPI: credit progress | `{ "progress": 0.75 }` |
+| GET | `/api/progress/timely-completion?total_enrolled=10&assigned=8` | KPI: timely completion rate | `{ "rate": 0.85 }` |
+| POST | `/api/progress/pos-coverage` | Curriculum coverage reporting | Body: `{ "students": [{ "id": 4, "name": "..." }] }` |
+| POST | `/api/progress/engagement` | Engagement rate reporting | Body: `{ "students": [{ "id": 4, "name": "..." }] }` |
+
+**Karl's Credential Engine** (`CREDENTIAL_SERVICE_URL`):
+
+| Method | Endpoint | Purpose | Expected Response |
+|--------|----------|---------|-------------------|
+| GET | `/api/credentials/students/{studentId}/summary` | Student badges and certificates | `{ "total_earned": 3, "in_progress": 1, "details": [{ "id": 1, "name": "...", "type": "badge", "status": "earned", "earned_at": "2026-03-15" }] }` |
+
+If any external service is unreachable, Delta returns zero values or empty arrays for that data — no 500 errors.
+
 ### Cross-Service Communication (Internal)
 
 The Dashboard Service has no database tables of its own. It aggregates data by calling the other two Delta services over HTTP:
@@ -172,7 +238,25 @@ All three services share one PostgreSQL database. Tables and ownership:
 | `cohorts` | Enrolment Service | Student groups within an experience, with lifecycle state |
 | `cohort_enrolments` | Enrolment Service | Student-to-cohort assignments |
 
-The database starts empty. Data is populated through API calls — users via Quebec's auth service, courses via Papa, and school/experience/cohort data through Delta's own endpoints.
+The database starts empty. Users and schools must be seeded by the integrating team (see **Users Table Schema** below). Experiences, cohorts, and enrolments are created through Delta's API endpoints. Course data comes from Papa's service at runtime.
+
+### Users Table Schema
+
+Since Quebec manages user registration, the integrating team must ensure Delta's `users` table is populated. Required columns:
+
+| Column | Type | Required | Notes |
+|--------|------|----------|-------|
+| `id` | bigint (PK) | Auto | Auto-incremented |
+| `name` | varchar(255) | Yes | Display name |
+| `email` | varchar(255) | Yes | **Unique** — Delta matches auth tokens to local users by email |
+| `password` | varchar(255) | Yes | Can be a placeholder hash; not used when `AUTH_MODE=http` |
+| `role` | varchar(20) | Yes | `school_admin`, `school_teacher`, `student`, `parent` |
+| `school_id` | bigint (FK) | Nullable | References `schools.id`. Null for platform-level staff. |
+| `grade` | varchar | Nullable | Student grade level (e.g., `"10"`) |
+| `created_at` | timestamp | Yes | |
+| `updated_at` | timestamp | Yes | |
+
+A `schools` record must exist before creating users that reference it.
 
 ---
 
@@ -226,6 +310,120 @@ The database starts empty. Data is populated through API calls — users via Que
 | GET | `/api/school/enrolments/health` | Public | Health check |
 
 For full request/response shapes, see [`API-CONTRACT.docx`](API-CONTRACT.docx).
+
+### Request Body Schemas
+
+**POST /api/school/experiences** (create experience):
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `name` | string | Yes | Max 255 chars, non-empty |
+| `description` | string | Yes | Max 5000 chars |
+| `course_ids` | int[] | Yes | At least 1 element; each ID validated against Papa's course catalogue |
+
+**PUT /api/school/experiences/{id}** (update experience):
+
+All fields optional. Only provided fields are updated. `course_ids` replaces the entire list if present.
+
+**POST /api/school/cohorts** (create cohort):
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `experience_id` | int | Yes | Must reference an existing experience |
+| `name` | string | Yes | Max 255 chars, non-empty |
+| `start_date` | date | Yes | Today or later (`Y-m-d` format) |
+| `end_date` | date | Yes | Must be after `start_date` |
+| `capacity` | int | No | 1–10000 if provided |
+| `teacher_id` | int | No | Must reference an existing user if provided |
+
+New cohorts are always created with `status='not_started'`.
+
+**PUT /api/school/cohorts/{id}** (update cohort):
+
+All fields optional except `experience_id` and `status` (not updatable via PUT — use PATCH /activate and /complete for status changes).
+
+**POST /api/school/cohorts/{id}/enrolments** (enrol student):
+
+| Field | Type | Required | Validation |
+|-------|------|----------|------------|
+| `student_id` | int | Yes | Must exist, same school, role=student, cohort must be active |
+
+### Response Format
+
+**List endpoints** return a paginated wrapper:
+
+```json
+{
+  "data": [ ... ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 5,
+    "per_page": 15,
+    "total": 67
+  }
+}
+```
+
+**Detail and create endpoints** return the resource directly (no wrapper):
+
+```json
+{
+  "id": 1,
+  "name": "Cohort A",
+  "experience_id": 1,
+  "status": "active",
+  "teacher_name": "Ms. Smith",
+  "student_count": 6,
+  "removed_count": 0,
+  "capacity": 25,
+  "start_date": "2026-02-01",
+  "end_date": "2026-06-01"
+}
+```
+
+### Query Parameters
+
+**GET /api/school/cohorts**:
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `experience_id` | int | Filter to a single experience |
+| `status` | string | Filter by status: `not_started`, `active`, `completed` |
+| `search` | string | Case-insensitive substring match on cohort name |
+
+**GET /api/school/experiences**:
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `search` | string | Case-insensitive substring match on experience name |
+| `per_page` | int | Page size (default 15, max 100) |
+
+**GET /api/school/enrolments**:
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `search` | string | Name search on students |
+| `experience_id` | int | Filter to cohorts in a specific experience |
+| `cohort_id` | int | Filter to a specific cohort |
+| `student_id` | int | Filter to a specific student (auto-set for student/parent roles) |
+| `per_page` | int | Page size (default 15, max 100) |
+
+**GET /api/school/enrolments/export**:
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `cohort_id` | int | Export only enrolments from this cohort |
+| `experience_id` | int | Export only enrolments from cohorts in this experience |
+
+### CSV Export Columns
+
+**Enrolment export** (`/api/school/enrolments/export`):
+`student_name`, `student_email`, `cohort_name`, `experience_name`, `status`, `enrolled_at`, `removed_at`
+
+**Experience student export** (`/api/school/experiences/{id}/students/export`):
+`student_name`, `student_email`, `cohort_name`, `status`, `enrolled_at`
+
+All timestamps are in ISO 8601 format. Exports include both active and removed enrolments.
 
 ---
 
