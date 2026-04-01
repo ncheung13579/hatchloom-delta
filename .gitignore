@@ -5,7 +5,7 @@
 # Environment files
 **/.env
 !**/.env.example
-!**/.env.testing
+**/.env.testing
 **/.env.backup
 **/.env.production
 
@@ -68,4 +68,10 @@ run-integration-tests.sh
 run-integration-tests-full.sh
 stress_test.sh
 docker-compose.integration.yml
+docker-compose.test.yml
+integration_test.php
 reset-sequences.php
+
+# Internal tooling scripts
+*.py
+archive/

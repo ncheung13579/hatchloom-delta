@@ -22,8 +22,8 @@ services:
     environment:
       APP_NAME: EnrolmentService
       APP_KEY: base64:dGVzdGtleWZvcmVucm9sbWVudHNlcnZpY2Ux
-      APP_ENV: local
-      APP_DEBUG: "true"
+      APP_ENV: production
+      APP_DEBUG: "false"
       DB_CONNECTION: pgsql
       DB_HOST: postgres
       DB_PORT: 5432
@@ -50,8 +50,8 @@ services:
     environment:
       APP_NAME: ExperienceService
       APP_KEY: base64:dGVzdGtleWZvcmV4cGVyaWVuY2VzZXJ2aWNl
-      APP_ENV: local
-      APP_DEBUG: "true"
+      APP_ENV: production
+      APP_DEBUG: "false"
       DB_CONNECTION: pgsql
       DB_HOST: postgres
       DB_PORT: 5432
@@ -79,8 +79,8 @@ services:
     environment:
       APP_NAME: DashboardService
       APP_KEY: base64:dGVzdGtleWZvcmRhc2hib2FyZHNlcnZpY2Ux
-      APP_ENV: local
-      APP_DEBUG: "true"
+      APP_ENV: production
+      APP_DEBUG: "false"
       DB_CONNECTION: pgsql
       DB_HOST: postgres
       DB_PORT: 5432
