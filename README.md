@@ -83,8 +83,8 @@ curl -4 -H "Authorization: Bearer <jwt-token>" http://localhost:8001/api/school/
 
 | Role | Permissions |
 |------|-------------|
-| `school_admin` | Full access: create/edit/archive experiences, manage cohorts (create/edit/activate/complete), enrol/remove students, read all screens. |
-| `school_teacher` | Same permissions as `school_admin` — both roles have identical write access. |
+| `school_admin` | Unrestricted. Read all screens, create/edit/archive experiences, manage cohorts, enrol/remove students. |
+| `school_teacher` | Same as `school_admin`. Primary focus is building experiences and running cohorts, but has full write access to avoid workflow bottlenecks. |
 | `student` | Read own enrolments, progress, and credentials only. |
 | `parent` | Read linked children's data only. Backend enforces parent-child link verification. |
 
