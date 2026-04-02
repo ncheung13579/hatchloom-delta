@@ -138,8 +138,8 @@ class DataIntegrityTest extends TestCase
             $response = $this->postJson('/api/school/cohorts', [
                 'experience_id' => $this->experience->id,
                 'name' => $input,
-                'start_date' => '2026-04-01',
-                'end_date' => '2026-08-01',
+                'start_date' => now()->addDay()->format('Y-m-d'),
+                'end_date' => now()->addMonths(4)->format('Y-m-d'),
             ], $this->teacherHeaders());
 
             $response->assertStatus(201, "Failed to create cohort for case: {$label}");
@@ -412,8 +412,8 @@ class DataIntegrityTest extends TestCase
         $response = $this->postJson('/api/school/cohorts', [
             'experience_id' => $this->experience->id,
             'name' => $name,
-            'start_date' => '2026-04-01',
-            'end_date' => '2026-08-01',
+            'start_date' => now()->addDay()->format('Y-m-d'),
+            'end_date' => now()->addMonths(4)->format('Y-m-d'),
         ], $this->teacherHeaders());
 
         $response->assertStatus(201);

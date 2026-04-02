@@ -88,8 +88,8 @@ class CohortTest extends TestCase
         $response = $this->postJson('/api/school/cohorts', [
             'experience_id' => $this->experience->id,
             'name' => 'New Cohort',
-            'start_date' => '2026-04-01',
-            'end_date' => '2026-08-01',
+            'start_date' => now()->addDay()->format('Y-m-d'),
+            'end_date' => now()->addMonths(4)->format('Y-m-d'),
             'capacity' => 30,
         ], $this->authHeaders());
 
@@ -434,11 +434,14 @@ class CohortTest extends TestCase
 
     public function test_create_cohort_response_has_correct_values(): void
     {
+        $startDate = now()->addDay()->format('Y-m-d');
+        $endDate = now()->addMonths(4)->format('Y-m-d');
+
         $response = $this->postJson('/api/school/cohorts', [
             'experience_id' => $this->experience->id,
             'name' => 'Detailed Check Cohort',
-            'start_date' => '2026-04-01',
-            'end_date' => '2026-08-01',
+            'start_date' => $startDate,
+            'end_date' => $endDate,
             'capacity' => 40,
         ], $this->authHeaders());
 
@@ -448,8 +451,8 @@ class CohortTest extends TestCase
         $this->assertEquals('not_started', $data['status']);
         $this->assertEquals($this->experience->id, $data['experience_id']);
         $this->assertEquals(40, $data['capacity']);
-        $this->assertEquals('2026-04-01', $data['start_date']);
-        $this->assertEquals('2026-08-01', $data['end_date']);
+        $this->assertEquals($startDate, $data['start_date']);
+        $this->assertEquals($endDate, $data['end_date']);
         $this->assertNotNull($data['created_at']);
     }
 
@@ -543,8 +546,8 @@ class CohortTest extends TestCase
         $response = $this->postJson('/api/school/cohorts', [
             'experience_id' => $this->experience->id,
             'name' => 'Admin Cohort',
-            'start_date' => '2026-04-01',
-            'end_date' => '2026-08-01',
+            'start_date' => now()->addDay()->format('Y-m-d'),
+            'end_date' => now()->addMonths(4)->format('Y-m-d'),
         ], $this->authHeaders());
 
         $response->assertStatus(201)
@@ -615,8 +618,8 @@ class CohortTest extends TestCase
         $response = $this->postJson('/api/school/cohorts', [
             'experience_id' => $this->experience->id,
             'name' => 'No Capacity Cohort',
-            'start_date' => '2026-04-01',
-            'end_date' => '2026-08-01',
+            'start_date' => now()->addDay()->format('Y-m-d'),
+            'end_date' => now()->addMonths(4)->format('Y-m-d'),
         ], $this->authHeaders());
 
         $response->assertStatus(201);
@@ -854,8 +857,8 @@ class CohortTest extends TestCase
         $response = $this->postJson('/api/school/cohorts', [
             'experience_id' => $this->experience->id,
             'name' => 'Teacher Cohort',
-            'start_date' => '2026-04-01',
-            'end_date' => '2026-08-01',
+            'start_date' => now()->addDay()->format('Y-m-d'),
+            'end_date' => now()->addMonths(4)->format('Y-m-d'),
             'capacity' => 30,
         ], $this->teacherAuthHeaders());
 
