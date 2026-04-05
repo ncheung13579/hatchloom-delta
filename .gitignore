@@ -64,9 +64,11 @@ DEMO-GUIDE.md
 DEMO-WALKTHROUGH.md
 
 # Test scripts and infrastructure (internal use only)
+run-tests.sh
 run-integration-tests.sh
 run-integration-tests-full.sh
 stress_test.sh
+Dockerfile.test
 docker-compose.integration.yml
 docker-compose.test.yml
 integration_test.php
